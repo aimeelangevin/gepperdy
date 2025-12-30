@@ -13,6 +13,34 @@ const config: Config = {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        // Jeopardy color palette
+        jeopardy: {
+          blue: {
+            DEFAULT: "#060CE9", // Deep Jeopardy blue
+            light: "#2138E8",
+            dark: "#040A99",
+          },
+          royal: {
+            DEFAULT: "#0033A0", // Royal blue
+            light: "#0047D0",
+            dark: "#002570",
+          },
+          magenta: {
+            DEFAULT: "#D4145A", // Jeopardy pink/magenta
+            light: "#E6458E",
+            dark: "#A00F45",
+          },
+          gold: {
+            DEFAULT: "#FFCC00", // Jeopardy gold
+            light: "#FFD93D",
+            dark: "#CCA300",
+          },
+          silver: {
+            DEFAULT: "#C0C0C0", // Jeopardy silver
+            light: "#E8E8E8",
+            dark: "#8C8C8C",
+          },
+        },
         primary: {
           50: "#eff6ff",
           100: "#dbeafe",
@@ -30,6 +58,7 @@ const config: Config = {
       fontFamily: {
         sans: ["var(--font-geist-sans)", "system-ui", "sans-serif"],
         mono: ["var(--font-geist-mono)", "monospace"],
+        jeopardy: ["var(--font-jeopardy)", "Georgia", "serif"],
       },
       animation: {
         "fade-in": "fadeIn 0.5s ease-in-out",
@@ -56,4 +85,3 @@ const config: Config = {
 };
 
 export default config;
-

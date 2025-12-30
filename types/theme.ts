@@ -1,5 +1,6 @@
 export enum Theme {
-  Xmas = "xmas",
-  Halloween = "halloween",
-  Summer = "summer"
+  Classic = "classic",
+  Christmas = "christmas",
+  Fall = "fall",
+  Birthday = "birthday",
 }

@@ -24,23 +24,10 @@ export default function Home() {
     setLoading(false);
   };
 
-  const handleCreateUser = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newUser.name || !newUser.email) return;
 
-    const response = await userApi.create(newUser);
-    if (response.success) {
-      setMessage('User created successfully!');
-      setNewUser({ name: '', email: '' });
-      fetchUsers();
-      setTimeout(() => setMessage(''), 3000);
-    } else {
-      setMessage(`Error: ${response.error}`);
-    }
-  };
 
   const handleDeleteUser = async (id: number) => {
-    const response = await userApi.delete(id);
+    const response = await userApi.delete(id.toString());
     if (response.success) {
       setMessage('User deleted successfully!');
       fetchUsers();
@@ -92,7 +79,7 @@ export default function Home() {
             <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">
               Add New User
             </h2>
-            <form onSubmit={handleCreateUser} className="space-y-4">
+            <form onSubmit={() => {}} className="space-y-4">
               <div>
                 <label
                   htmlFor="name"
