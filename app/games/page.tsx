@@ -1,10 +1,13 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Game } from '@/models/Game';
 import { Theme } from '@/types/theme';
 import { gameApi } from '@/lib/api';
+import { getUserId, clearUserId } from '@/lib/auth';
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 const THEME_ICONS: Record<Theme, string> = {
   [Theme.Classic]: '🎯',
@@ -14,18 +17,31 @@ const THEME_ICONS: Record<Theme, string> = {
 };
 
 
-export default function GamesPage() {
+function GamesPageContent() {
+  const router = useRouter();
   const [games, setGames] = useState<Game[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const handleLogout = () => {
+    clearUserId();
+    router.push('/login');
+  };
+
   useEffect(() => {
     const fetchGames = async () => {
+      const userId = getUserId();
+      if (!userId) {
+        setError('Not authenticated');
+        setLoading(false);
+        return;
+      }
+
       setLoading(true);
       setError(null);
       
       try {
-        const response = await gameApi.getAllGamesForUser("hardcoded-user-id");
+        const response = await gameApi.getAllGamesForUser(userId);
         if (response.success && response.data) {
           setGames(response.data);
         } else {
@@ -53,12 +69,20 @@ export default function GamesPage() {
             </h1>
               <p className="text-white/90">Select a game or create a new one</p>
             </div>
-            <Link
-              href="/games/new"
-              className="bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold hover:border-jeopardy-gold-light"
-            >
-              + New Game
-            </Link>
+            <div className="flex items-center gap-4">
+              <Link
+                href="/games/new"
+                className="bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold hover:border-jeopardy-gold-light"
+              >
+                + New Game
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold/50 hover:border-jeopardy-gold"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </div>
       </div>
@@ -83,7 +107,6 @@ export default function GamesPage() {
           </div>
         ) : games.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-jeopardy-blue/70 text-xl mb-6">No games yet</p>
             <Link
               href="/games/new"
               className="inline-block bg-jeopardy-gold hover:bg-jeopardy-gold-light text-jeopardy-blue font-bold py-3 px-8 rounded-lg transition-colors shadow-lg uppercase tracking-wide"
@@ -149,6 +172,14 @@ export default function GamesPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function GamesPage() {
+  return (
+    <ProtectedRoute>
+      <GamesPageContent />
+    </ProtectedRoute>
   );
 }
 

@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Theme } from '@/types/theme';
 import { gameApi } from '@/lib/api';
+import { getUserId, clearUserId } from '@/lib/auth';
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 type RoundType = 'single' | 'double';
 
@@ -31,7 +33,7 @@ const THEME_INFO = {
   },
 };
 
-export default function NewGamePage() {
+function NewGamePageContent() {
   const router = useRouter();
   const [gameName, setGameName] = useState('');
   const [rounds, setRounds] = useState<RoundType>('single');
@@ -39,8 +41,19 @@ export default function NewGamePage() {
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const handleLogout = () => {
+    clearUserId();
+    router.push('/login');
+  };
+
   const handleCreate = async () => {
     if (!gameName.trim()) return;
+    
+    const userId = getUserId();
+    if (!userId) {
+      setError('Not authenticated');
+      return;
+    }
     
     setIsCreating(true);
     setError(null);
@@ -51,7 +64,7 @@ export default function NewGamePage() {
         name: gameName.trim(),
         theme,
         type: rounds, // 'single' or 'double' - backend will create placeholder rounds/categories/questions
-        userId: "hardcoded-user-id", // TODO: Get actual user ID from auth
+        userId,
       });
 
       if (response.success && response.data) {
@@ -72,10 +85,20 @@ export default function NewGamePage() {
       {/* Header */}
       <div className="bg-jeopardy-royal border-b-4 border-jeopardy-gold py-8">
         <div className="container mx-auto px-4">
-          <h1 className="text-4xl font-bold text-jeopardy-gold mb-2 tracking-wide font-jeopardy" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
-            CREATE NEW GAME
-          </h1>
-          <p className="text-white/90">Set up your game preferences</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold text-jeopardy-gold mb-2 tracking-wide font-jeopardy" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
+                CREATE NEW GAME
+              </h1>
+              <p className="text-white/90">Set up your game preferences</p>
+            </div>
+            <button
+              onClick={handleLogout}
+              className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold/50 hover:border-jeopardy-gold"
+            >
+              Logout
+            </button>
+          </div>
         </div>
       </div>
 
@@ -206,6 +229,14 @@ export default function NewGamePage() {
         </Link>
       </div>
     </div>
+  );
+}
+
+export default function NewGamePage() {
+  return (
+    <ProtectedRoute>
+      <NewGamePageContent />
+    </ProtectedRoute>
   );
 }
 

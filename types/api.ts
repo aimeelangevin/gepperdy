@@ -23,6 +23,24 @@ export interface GetUploadUrlResponse {
   key: string;
 }
 
+// Auth API types
+export interface RegisterRequest {
+  name: string;
+  email: string;
+  password: string; // Plain text password - will be hashed on server
+}
+
+export interface LoginRequest {
+  email: string;
+  password: string; // Plain text password - will be verified on server
+}
+
+export interface AuthResponse {
+  _id: string;
+  name: string;
+  email: string;
+}
+
 // User API types
 export interface CreateUserRequest {
   name: string;

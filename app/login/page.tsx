@@ -1,11 +1,25 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { authApi } from '@/lib/api';
+import { saveUserId, getUserId } from '@/lib/auth';
 
 export default function LoginPage() {
+  const router = useRouter();
+
+  // Redirect if already logged in
+  useEffect(() => {
+    const userId = getUserId();
+    if (userId) {
+      router.push('/games');
+    }
+  }, [router]);
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   
   const [loginData, setLoginData] = useState({
     email: '',
@@ -19,20 +33,59 @@ export default function LoginPage() {
     confirmPassword: '',
   });
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Login:', loginData);
-    // Add your login logic here
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await authApi.login({
+        email: loginData.email,
+        password: loginData.password,
+      });
+
+      if (response.success && response.data) {
+        saveUserId(response.data._id);
+        router.push('/games');
+      } else {
+        setError(response.error || 'Login failed');
+      }
+    } catch (err) {
+      setError('An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleSignup = (e: React.FormEvent) => {
+  const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
+    
     if (signupData.password !== signupData.confirmPassword) {
-      alert('Passwords do not match!');
+      setError('Passwords do not match!');
       return;
     }
-    console.log('Signup:', signupData);
-    // Add your signup logic here
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await authApi.register({
+        name: signupData.name,
+        email: signupData.email,
+        password: signupData.password,
+      });
+
+      if (response.success && response.data) {
+        saveUserId(response.data._id);
+        router.push('/games');
+      } else {
+        setError(response.error || 'Registration failed');
+      }
+    } catch (err) {
+      setError('An unexpected error occurred');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -74,6 +127,11 @@ export default function LoginPage() {
 
           {/* Forms */}
           <div className="p-8">
+            {error && (
+              <div className="mb-6 p-4 bg-red-100 dark:bg-red-900/30 border-2 border-red-500 rounded-lg text-red-700 dark:text-red-400 text-sm">
+                {error}
+              </div>
+            )}
             {isLogin ? (
               /* Login Form */
               <form onSubmit={handleLogin} className="space-y-6">
@@ -137,9 +195,10 @@ export default function LoginPage() {
 
                 <button
                   type="submit"
-                  className="w-full bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold hover:border-jeopardy-gold-light"
+                  disabled={isLoading}
+                  className="w-full bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold hover:border-jeopardy-gold-light"
                 >
-                  Login
+                  {isLoading ? 'Logging in...' : 'Login'}
                 </button>
               </form>
             ) : (
@@ -268,9 +327,10 @@ export default function LoginPage() {
 
                 <button
                   type="submit"
-                  className="w-full bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold hover:border-jeopardy-gold-light"
+                  disabled={isLoading}
+                  className="w-full bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold hover:border-jeopardy-gold-light"
                 >
-                  Create Account
+                  {isLoading ? 'Creating Account...' : 'Create Account'}
                 </button>
               </form>
             )}

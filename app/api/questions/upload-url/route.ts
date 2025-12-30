@@ -46,6 +46,7 @@ export async function POST(request: Request) {
       Bucket: AWS_S3_BUCKET,
       Key: s3Key,
       ContentType: fileType,
+      ACL: "public-read", // Make the uploaded file publicly readable
     });
 
     // Generate presigned URL (valid for 1 hour)

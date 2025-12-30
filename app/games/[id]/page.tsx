@@ -10,12 +10,13 @@ import type { Question } from '@/models/Question';
 import type { GameState, Team } from '@/models/GameState';
 import { Theme } from '@/types/theme';
 import Link from 'next/link';
+import ProtectedRoute from '@/components/ProtectedRoute';
 
 type ExtendedRound = Round & {
   categories: (Category & { questions: Question[] })[];
 };
 
-export default function GamePlayPage({ params }: { params: Promise<{ id: string }> }) {
+function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   
@@ -403,7 +404,7 @@ export default function GamePlayPage({ params }: { params: Promise<{ id: string 
                 href="/games"
                 className="bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold text-sm"
               >
-                Back
+                Exit
               </Link>
             </div>
           </div>
@@ -535,3 +536,12 @@ export default function GamePlayPage({ params }: { params: Promise<{ id: string 
     </div>
   );
 }
+
+export default function GamePlayPage({ params }: { params: Promise<{ id: string }> }) {
+  return (
+    <ProtectedRoute>
+      <GamePlayPageContent params={params} />
+    </ProtectedRoute>
+  );
+}
+
