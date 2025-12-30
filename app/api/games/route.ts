@@ -57,6 +57,7 @@ export async function POST(request: Request) {
       const isDoubleJeopardy = roundIndex === 1; // Second round is double jeopardy
       const pointMultiplier = isDoubleJeopardy ? 2 : 1;
       const categoryIds: string[] = [];
+      const allQuestionIds: string[] = []; // Track all questions in this round
 
       // Create 5 categories per round
       for (let catIndex = 0; catIndex < 5; catIndex++) {
@@ -70,7 +71,9 @@ export async function POST(request: Request) {
             isDailyDouble: false,
             points: (qIndex + 1) * 100 * pointMultiplier,
           });
-          questionIds.push(question._id.toString());
+          const questionId = question._id.toString();
+          questionIds.push(questionId);
+          allQuestionIds.push(questionId);
         }
 
         // Create category
@@ -79,6 +82,18 @@ export async function POST(request: Request) {
           questionIds,
         });
         categoryIds.push(category._id.toString());
+      }
+
+      // Randomly select daily doubles for this round
+      const numDailyDoubles = isDoubleJeopardy ? 2 : 1;
+      const shuffled = [...allQuestionIds].sort(() => Math.random() - 0.5);
+      const dailyDoubleIds = shuffled.slice(0, numDailyDoubles);
+
+      // Update the selected questions to be daily doubles
+      for (const questionId of dailyDoubleIds) {
+        await QuestionModel.findByIdAndUpdate(questionId, {
+          isDailyDouble: true,
+        });
       }
 
       // Create round
@@ -94,7 +109,6 @@ export async function POST(request: Request) {
       name,
       theme,
       roundIds,
-      userId,
     });
 
     return NextResponse.json(
