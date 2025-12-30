@@ -1,28 +1,41 @@
-import { NextResponse } from 'next/server';
-import type { Round } from '@/types/round';
-
-// In-memory storage (should match the one in ../route.ts in production)
-let rounds: Round[] = [];
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/db";
+import RoundModel from "@/models/Round";
 
 // GET single round by ID
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const round = rounds.find((r) => r._id === id);
+  try {
+    await connectDB();
+    const { id } = await params;
+    const round = await RoundModel.findById(id);
 
-  if (!round) {
+    if (!round) {
+      return NextResponse.json(
+        { success: false, error: "Round not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        _id: round._id.toString(),
+        categoryIds: round.categoryIds,
+      },
+    });
+  } catch (error) {
     return NextResponse.json(
-      { success: false, error: 'Round not found' },
-      { status: 404 }
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to fetch round",
+      },
+      { status: 500 }
     );
   }
-
-  return NextResponse.json({
-    success: true,
-    data: round,
-  });
 }
 
 // PUT - Update round by ID
@@ -31,28 +44,40 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await connectDB();
     const { id } = await params;
     const body = await request.json();
     const { categoryIds } = body;
 
-    const roundIndex = rounds.findIndex((r) => r._id === id);
+    const round = await RoundModel.findByIdAndUpdate(
+      id,
+      {
+        ...(categoryIds !== undefined && { categoryIds }),
+      },
+      { new: true, runValidators: true }
+    );
 
-    if (roundIndex === -1) {
+    if (!round) {
       return NextResponse.json(
-        { success: false, error: 'Round not found' },
+        { success: false, error: "Round not found" },
         { status: 404 }
       );
     }
 
-    if (categoryIds !== undefined) rounds[roundIndex].categoryIds = categoryIds;
-
     return NextResponse.json({
       success: true,
-      data: rounds[roundIndex],
+      data: {
+        _id: round._id.toString(),
+        categoryIds: round.categoryIds,
+      },
     });
   } catch (error) {
     return NextResponse.json(
-      { success: false, error: 'Invalid request body' },
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to update round",
+      },
       { status: 400 }
     );
   }
@@ -63,22 +88,35 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const roundIndex = rounds.findIndex((r) => r._id === id);
+  try {
+    await connectDB();
+    const { id } = await params;
+    const deletedRound = await RoundModel.findByIdAndDelete(id);
 
-  if (roundIndex === -1) {
+    if (!deletedRound) {
+      return NextResponse.json(
+        { success: false, error: "Round not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        _id: deletedRound._id.toString(),
+        categoryIds: deletedRound.categoryIds,
+      },
+      message: "Round deleted successfully",
+    });
+  } catch (error) {
     return NextResponse.json(
-      { success: false, error: 'Round not found' },
-      { status: 404 }
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to delete round",
+      },
+      { status: 500 }
     );
   }
-
-  const deletedRound = rounds.splice(roundIndex, 1)[0];
-
-  return NextResponse.json({
-    success: true,
-    data: deletedRound,
-    message: 'Round deleted successfully',
-  });
 }
 

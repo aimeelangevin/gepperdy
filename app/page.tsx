@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { userApi, helloApi, type User } from '@/lib/api';
+import { userApi, helloApi } from '@/lib/api';
+import type { User } from '@/models/User';
 
 export default function Home() {
   const [users, setUsers] = useState<User[]>([]);

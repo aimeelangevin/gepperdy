@@ -1,28 +1,42 @@
-import { NextResponse } from 'next/server';
-import type { Category } from '@/types/category';
-
-// In-memory storage (should match the one in ../route.ts in production)
-let categories: Category[] = [];
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/db";
+import CategoryModel from "@/models/Category";
 
 // GET single category by ID
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const category = categories.find((c) => c._id === id);
+  try {
+    await connectDB();
+    const { id } = await params;
+    const category = await CategoryModel.findById(id);
 
-  if (!category) {
+    if (!category) {
+      return NextResponse.json(
+        { success: false, error: "Category not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        _id: category._id.toString(),
+        name: category.name,
+        questionIds: category.questionIds,
+      },
+    });
+  } catch (error) {
     return NextResponse.json(
-      { success: false, error: 'Category not found' },
-      { status: 404 }
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to fetch category",
+      },
+      { status: 500 }
     );
   }
-
-  return NextResponse.json({
-    success: true,
-    data: category,
-  });
 }
 
 // PUT - Update category by ID
@@ -31,30 +45,42 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await connectDB();
     const { id } = await params;
     const body = await request.json();
     const { name, questionIds } = body;
 
-    const categoryIndex = categories.findIndex((c) => c._id === id);
+    const category = await CategoryModel.findByIdAndUpdate(
+      id,
+      {
+        ...(name !== undefined && { name }),
+        ...(questionIds !== undefined && { questionIds }),
+      },
+      { new: true, runValidators: true }
+    );
 
-    if (categoryIndex === -1) {
+    if (!category) {
       return NextResponse.json(
-        { success: false, error: 'Category not found' },
+        { success: false, error: "Category not found" },
         { status: 404 }
       );
     }
 
-    if (name !== undefined) categories[categoryIndex].name = name;
-    if (questionIds !== undefined)
-      categories[categoryIndex].questionIds = questionIds;
-
     return NextResponse.json({
       success: true,
-      data: categories[categoryIndex],
+      data: {
+        _id: category._id.toString(),
+        name: category.name,
+        questionIds: category.questionIds,
+      },
     });
   } catch (error) {
     return NextResponse.json(
-      { success: false, error: 'Invalid request body' },
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to update category",
+      },
       { status: 400 }
     );
   }
@@ -65,22 +91,35 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const categoryIndex = categories.findIndex((c) => c._id === id);
+  try {
+    await connectDB();
+    const { id } = await params;
+    const deletedCategory = await CategoryModel.findByIdAndDelete(id);
 
-  if (categoryIndex === -1) {
+    if (!deletedCategory) {
+      return NextResponse.json(
+        { success: false, error: "Category not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        _id: deletedCategory._id.toString(),
+        name: deletedCategory.name,
+        questionIds: deletedCategory.questionIds,
+      },
+      message: "Category deleted successfully",
+    });
+  } catch (error) {
     return NextResponse.json(
-      { success: false, error: 'Category not found' },
-      { status: 404 }
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to delete category",
+      },
+      { status: 500 }
     );
   }
-
-  const deletedCategory = categories.splice(categoryIndex, 1)[0];
-
-  return NextResponse.json({
-    success: true,
-    data: deletedCategory,
-    message: 'Category deleted successfully',
-  });
 }
-

@@ -1,20 +1,38 @@
-import { NextResponse } from 'next/server';
-import type { User } from "@/types/user";
-
-// In-memory storage (replace with a real database in production)
-let users: User[] = [];
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/db";
+import UserModel from "@/models/User";
 
 // GET all users
 export async function GET() {
-  return NextResponse.json({
-    success: true,
-    data: users,
-  });
+  try {
+    await connectDB();
+    const users = await UserModel.find({});
+    const usersData = users.map((user) => ({
+      _id: user._id.toString(),
+      name: user.name,
+      email: user.email,
+      passwordHash: user.passwordHash,
+    }));
+
+    return NextResponse.json({
+      success: true,
+      data: usersData,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to fetch users",
+      },
+      { status: 500 }
+    );
+  }
 }
 
 // POST - Create a new user
 export async function POST(request: Request) {
   try {
+    await connectDB();
     const body = await request.json();
     const { name, email, passwordHash } = body;
 
@@ -25,19 +43,41 @@ export async function POST(request: Request) {
       );
     }
 
-    const newUser: User = {
-      _id: crypto.randomUUID(),
+    const newUser = await UserModel.create({
       name,
       email,
       passwordHash,
-    };
+    });
 
-    users.push(newUser);
-
-    return NextResponse.json({ success: true, data: newUser }, { status: 201 });
-  } catch (error) {
     return NextResponse.json(
-      { success: false, error: "Invalid request body" },
+      {
+        success: true,
+        data: {
+          _id: newUser._id.toString(),
+          name: newUser.name,
+          email: newUser.email,
+          passwordHash: newUser.passwordHash,
+        },
+      },
+      { status: 201 }
+    );
+  } catch (error) {
+    if (
+      error &&
+      typeof error === "object" &&
+      "code" in error &&
+      error.code === 11000
+    ) {
+      return NextResponse.json(
+        { success: false, error: "Email already exists" },
+        { status: 400 }
+      );
+    }
+    return NextResponse.json(
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to create user",
+      },
       { status: 400 }
     );
   }
@@ -45,10 +85,21 @@ export async function POST(request: Request) {
 
 // DELETE all users (for testing)
 export async function DELETE() {
-  users = [];
-  return NextResponse.json({
-    success: true,
-    message: 'All users deleted',
-  });
+  try {
+    await connectDB();
+    await UserModel.deleteMany({});
+    return NextResponse.json({
+      success: true,
+      message: "All users deleted",
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to delete users",
+      },
+      { status: 500 }
+    );
+  }
 }
-

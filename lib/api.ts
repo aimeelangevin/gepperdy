@@ -1,11 +1,11 @@
 // API utility functions for client-side requests
 
-import type { User } from "@/types/user";
-import type { Category } from "@/types/category";
-import type { Game } from "@/types/game";
-import type { GameState } from "@/types/gameState";
-import type { Question } from "@/types/question";
-import type { Round } from "@/types/round";
+import type { User } from "@/models/User";
+import type { Category } from "@/models/Category";
+import type { Game } from "@/models/Game";
+import type { GameState } from "@/models/GameState";
+import type { Question } from "@/models/Question";
+import type { Round } from "@/models/Round";
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
 

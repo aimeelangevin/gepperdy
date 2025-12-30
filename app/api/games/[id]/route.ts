@@ -1,28 +1,42 @@
-import { NextResponse } from 'next/server';
-import type { Game } from '@/types/game';
-
-// In-memory storage (should match the one in ../route.ts in production)
-let games: Game[] = [];
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/db";
+import GameModel from "@/models/Game";
 
 // GET single game by ID
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const game = games.find((g) => g._id === id);
+  try {
+    await connectDB();
+    const { id } = await params;
+    const game = await GameModel.findById(id);
 
-  if (!game) {
+    if (!game) {
+      return NextResponse.json(
+        { success: false, error: "Game not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        _id: game._id.toString(),
+        name: game.name,
+        theme: game.theme,
+        roundIds: game.roundIds,
+      },
+    });
+  } catch (error) {
     return NextResponse.json(
-      { success: false, error: 'Game not found' },
-      { status: 404 }
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to fetch game",
+      },
+      { status: 500 }
     );
   }
-
-  return NextResponse.json({
-    success: true,
-    data: game,
-  });
 }
 
 // PUT - Update game by ID
@@ -31,30 +45,43 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await connectDB();
     const { id } = await params;
     const body = await request.json();
     const { name, theme, roundIds } = body;
 
-    const gameIndex = games.findIndex((g) => g._id === id);
+    const game = await GameModel.findByIdAndUpdate(
+      id,
+      {
+        ...(name !== undefined && { name }),
+        ...(theme !== undefined && { theme }),
+        ...(roundIds !== undefined && { roundIds }),
+      },
+      { new: true, runValidators: true }
+    );
 
-    if (gameIndex === -1) {
+    if (!game) {
       return NextResponse.json(
-        { success: false, error: 'Game not found' },
+        { success: false, error: "Game not found" },
         { status: 404 }
       );
     }
 
-    if (name !== undefined) games[gameIndex].name = name;
-    if (theme !== undefined) games[gameIndex].theme = theme;
-    if (roundIds !== undefined) games[gameIndex].roundIds = roundIds;
-
     return NextResponse.json({
       success: true,
-      data: games[gameIndex],
+      data: {
+        _id: game._id.toString(),
+        name: game.name,
+        theme: game.theme,
+        roundIds: game.roundIds,
+      },
     });
   } catch (error) {
     return NextResponse.json(
-      { success: false, error: 'Invalid request body' },
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to update game",
+      },
       { status: 400 }
     );
   }
@@ -65,22 +92,35 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const gameIndex = games.findIndex((g) => g._id === id);
+  try {
+    await connectDB();
+    const { id } = await params;
+    const deletedGame = await GameModel.findByIdAndDelete(id);
 
-  if (gameIndex === -1) {
+    if (!deletedGame) {
+      return NextResponse.json(
+        { success: false, error: "Game not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        _id: deletedGame._id.toString(),
+        name: deletedGame.name,
+        theme: deletedGame.theme,
+        roundIds: deletedGame.roundIds,
+      },
+      message: "Game deleted successfully",
+    });
+  } catch (error) {
     return NextResponse.json(
-      { success: false, error: 'Game not found' },
-      { status: 404 }
+      {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to delete game",
+      },
+      { status: 500 }
     );
   }
-
-  const deletedGame = games.splice(gameIndex, 1)[0];
-
-  return NextResponse.json({
-    success: true,
-    data: deletedGame,
-    message: 'Game deleted successfully',
-  });
 }
-

@@ -1,28 +1,46 @@
-import { NextResponse } from 'next/server';
-import type { Question } from '@/types/question';
-
-// In-memory storage (should match the one in ../route.ts in production)
-let questions: Question[] = [];
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/db";
+import QuestionModel from "@/models/Question";
 
 // GET single question by ID
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const question = questions.find((q) => q._id === id);
+  try {
+    await connectDB();
+    const { id } = await params;
+    const question = await QuestionModel.findById(id);
 
-  if (!question) {
+    if (!question) {
+      return NextResponse.json(
+        { success: false, error: "Question not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        _id: question._id.toString(),
+        text: question.text,
+        imageUrl: question.imageUrl,
+        audioUrl: question.audioUrl,
+        answer: question.answer,
+        isDailyDouble: question.isDailyDouble,
+        points: question.points,
+      },
+    });
+  } catch (error) {
     return NextResponse.json(
-      { success: false, error: 'Question not found' },
-      { status: 404 }
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to fetch question",
+      },
+      { status: 500 }
     );
   }
-
-  return NextResponse.json({
-    success: true,
-    data: question,
-  });
 }
 
 // PUT - Update question by ID
@@ -31,34 +49,50 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await connectDB();
     const { id } = await params;
     const body = await request.json();
     const { text, imageUrl, audioUrl, answer, isDailyDouble, points } = body;
 
-    const questionIndex = questions.findIndex((q) => q._id === id);
+    const question = await QuestionModel.findByIdAndUpdate(
+      id,
+      {
+        ...(text !== undefined && { text }),
+        ...(imageUrl !== undefined && { imageUrl }),
+        ...(audioUrl !== undefined && { audioUrl }),
+        ...(answer !== undefined && { answer }),
+        ...(isDailyDouble !== undefined && { isDailyDouble }),
+        ...(points !== undefined && { points }),
+      },
+      { new: true, runValidators: true }
+    );
 
-    if (questionIndex === -1) {
+    if (!question) {
       return NextResponse.json(
-        { success: false, error: 'Question not found' },
+        { success: false, error: "Question not found" },
         { status: 404 }
       );
     }
 
-    if (text !== undefined) questions[questionIndex].text = text;
-    if (imageUrl !== undefined) questions[questionIndex].imageUrl = imageUrl;
-    if (audioUrl !== undefined) questions[questionIndex].audioUrl = audioUrl;
-    if (answer !== undefined) questions[questionIndex].answer = answer;
-    if (isDailyDouble !== undefined)
-      questions[questionIndex].isDailyDouble = isDailyDouble;
-    if (points !== undefined) questions[questionIndex].points = points;
-
     return NextResponse.json({
       success: true,
-      data: questions[questionIndex],
+      data: {
+        _id: question._id.toString(),
+        text: question.text,
+        imageUrl: question.imageUrl,
+        audioUrl: question.audioUrl,
+        answer: question.answer,
+        isDailyDouble: question.isDailyDouble,
+        points: question.points,
+      },
     });
   } catch (error) {
     return NextResponse.json(
-      { success: false, error: 'Invalid request body' },
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to update question",
+      },
       { status: 400 }
     );
   }
@@ -69,22 +103,39 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { id } = await params;
-  const questionIndex = questions.findIndex((q) => q._id === id);
+  try {
+    await connectDB();
+    const { id } = await params;
+    const deletedQuestion = await QuestionModel.findByIdAndDelete(id);
 
-  if (questionIndex === -1) {
+    if (!deletedQuestion) {
+      return NextResponse.json(
+        { success: false, error: "Question not found" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        _id: deletedQuestion._id.toString(),
+        text: deletedQuestion.text,
+        imageUrl: deletedQuestion.imageUrl,
+        audioUrl: deletedQuestion.audioUrl,
+        answer: deletedQuestion.answer,
+        isDailyDouble: deletedQuestion.isDailyDouble,
+        points: deletedQuestion.points,
+      },
+      message: "Question deleted successfully",
+    });
+  } catch (error) {
     return NextResponse.json(
-      { success: false, error: 'Question not found' },
-      { status: 404 }
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to delete question",
+      },
+      { status: 500 }
     );
   }
-
-  const deletedQuestion = questions.splice(questionIndex, 1)[0];
-
-  return NextResponse.json({
-    success: true,
-    data: deletedQuestion,
-    message: 'Question deleted successfully',
-  });
 }
-

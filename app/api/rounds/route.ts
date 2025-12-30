@@ -1,39 +1,62 @@
-import { NextResponse } from 'next/server';
-import type { Round } from '@/types/round';
-
-// In-memory storage (replace with a real database in production)
-let rounds: Round[] = [];
+import { NextResponse } from "next/server";
+import connectDB from "@/lib/db";
+import RoundModel from "@/models/Round";
 
 // GET all rounds
 export async function GET() {
-  return NextResponse.json({
-    success: true,
-    data: rounds,
-  });
+  try {
+    await connectDB();
+    const rounds = await RoundModel.find({});
+    const roundsData = rounds.map((round) => ({
+      _id: round._id.toString(),
+      categoryIds: round.categoryIds,
+    }));
+
+    return NextResponse.json({
+      success: true,
+      data: roundsData,
+    });
+  } catch (error) {
+    return NextResponse.json(
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to fetch rounds",
+      },
+      { status: 500 }
+    );
+  }
 }
 
 // POST - Create a new round
 export async function POST(request: Request) {
   try {
+    await connectDB();
     const body = await request.json();
     const { categoryIds } = body;
 
-    const newRound: Round = {
-      _id: crypto.randomUUID(),
+    const newRound = await RoundModel.create({
       categoryIds: categoryIds || [],
-    };
-
-    rounds.push(newRound);
+    });
 
     return NextResponse.json(
-      { success: true, data: newRound },
+      {
+        success: true,
+        data: {
+          _id: newRound._id.toString(),
+          categoryIds: newRound.categoryIds,
+        },
+      },
       { status: 201 }
     );
   } catch (error) {
     return NextResponse.json(
-      { success: false, error: 'Invalid request body' },
+      {
+        success: false,
+        error:
+          error instanceof Error ? error.message : "Failed to create round",
+      },
       { status: 400 }
     );
   }
 }
-
