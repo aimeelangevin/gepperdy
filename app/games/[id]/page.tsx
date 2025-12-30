@@ -67,6 +67,8 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
   
   // Audio ref for Daily Double sound
   const dailyDoubleAudioRef = useRef<HTMLAudioElement>(null);
+  // Round summary state
+  const [showRoundSummary, setShowRoundSummary] = useState(false);
 
   useEffect(() => {
     loadGame();
@@ -326,6 +328,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     teams?: Team[];
     currentTeamIndex?: number;
     completedQuestionIds?: string[];
+    currentRoundIndex?: number;
   }) => {
     if (!gameState) return;
 
@@ -335,7 +338,25 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
         teams: updates.teams ? (updates.teams as any) : undefined,
       });
       if (response.success && response.data) {
-        setGameState(response.data);
+        const updatedState = response.data;
+        setGameState(updatedState);
+        
+        // Check if current round is complete
+        if (updatedState && rounds.length > 0) {
+          const currentRound = rounds[updatedState.currentRoundIndex];
+          if (currentRound) {
+            const allQuestionIds = currentRound.categories.flatMap(cat => 
+              cat.questions.map(q => q._id.toString())
+            );
+            const isRoundComplete = allQuestionIds.length > 0 && 
+              allQuestionIds.every(id => updatedState.completedQuestionIds.includes(id));
+            
+            // Show summary if round is complete (whether it's the last round or not)
+            if (isRoundComplete) {
+              setShowRoundSummary(true);
+            }
+          }
+        }
       } else {
         console.error('Failed to update game state:', response.error);
         setError(response.error || 'Failed to update game state');
@@ -343,6 +364,19 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     } catch (err) {
       console.error('Failed to update game state:', err);
       setError('Failed to update game state');
+    }
+  };
+
+  const handleNextRound = async () => {
+    if (!gameState || !rounds.length) return;
+    
+    const nextRoundIndex = gameState.currentRoundIndex + 1;
+    if (nextRoundIndex < rounds.length) {
+      await updateGameState({
+        currentRoundIndex: nextRoundIndex,
+        currentTeamIndex: 0, // Reset to first team for new round
+      });
+      setShowRoundSummary(false);
     }
   };
 
@@ -536,6 +570,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
         hover: 'hover:bg-red-800',
         border: 'border-green-800',
         text: 'text-white',
+        accent: 'bg-green-600',
       };
     }
     if (game?.theme === Theme.Fall) {
@@ -544,6 +579,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
         hover: 'hover:bg-amber-900',
         border: 'border-orange-700',
         text: 'text-white',
+        accent: 'bg-orange-500',
       };
     }
     if (game?.theme === Theme.Birthday) {
@@ -552,13 +588,15 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
         hover: 'hover:bg-sky-500',
         border: 'border-sky-600',
         text: 'text-jeopardy-royal',
+        accent: 'bg-sky-500',
       };
     }
     return {
-      bg: 'bg-jeopardy-blue',
+      bg: 'bg-jeopardy-royal',
       hover: 'hover:bg-jeopardy-blue-light',
-      border: 'border-jeopardy-royal',
+      border: 'border-jeopardy-gold',
       text: 'text-jeopardy-gold',
+      accent: 'bg-jeopardy-gold',
     };
   };
 
@@ -756,8 +794,6 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
             {/* Center present pile */}
             <div className="absolute bottom-0 left-1/2 -translate-x-1/2 flex items-end gap-2">
               <img src="/present2.png" alt="present" className="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-md" />
-              <img src="/present1.png" alt="present" className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-md" />
-              <img src="/present2.png" alt="present" className="w-18 h-18 md:w-22 md:h-22 object-contain drop-shadow-md" />
               <img src="/present1.png" alt="present" className="w-14 h-14 md:w-18 md:h-18 object-contain drop-shadow-md" />
             </div>
 
@@ -820,51 +856,58 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       )}
       
       {/* Header */}
-      <div className="bg-jeopardy-royal border-b-4 border-jeopardy-gold py-4 relative z-20">
-        <div className="container mx-auto px-4">
+      <div className={`${getHeaderColors().bg} border-b-4 ${getHeaderColors().border} py-4 relative z-20`}>
+        <div className="container mx-auto px-4 relative">
           <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-jeopardy-gold tracking-wide font-sans uppercase" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
+            <div className="flex-1">
+              <h1 className={`text-2xl font-bold ${getHeaderColors().text} tracking-wide font-sans uppercase`} style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
                 {game.name.toUpperCase()}
               </h1>
             </div>
-            <div className="flex-1 text-center">
-              <p className="text-jeopardy-gold text-3xl md:text-4xl lg:text-5xl font-bold font-sans uppercase tracking-wide" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
+            <div className="absolute left-1/2 -translate-x-1/2 text-center">
+              <p className={`${getHeaderColors().text} text-3xl md:text-4xl lg:text-5xl font-bold font-sans uppercase tracking-wide`} style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
                 {currentTeam.name.toUpperCase()}&apos;S TURN
               </p>
             </div>
-            <div className="flex items-center gap-4">
-              {/* Team scores */}
-              <div className="flex gap-2">
-                {gameState.teams.map((team, index) => (
-                  <div
-                    key={team.id}
-                    className={`px-4 py-2 rounded-lg font-bold text-center ${
-                      index === gameState.currentTeamIndex
-                        ? 'bg-jeopardy-gold text-jeopardy-blue border-2 border-jeopardy-blue'
-                        : 'bg-jeopardy-blue text-jeopardy-gold'
-                    }`}
-                  >
-                    <div className="text-xs uppercase tracking-wide text-center">{team.name.toUpperCase()}</div>
-                    <div className="text-xl text-center">{team.score < 0 ? '-' : ''}${Math.abs(team.score)}</div>
-                  </div>
-                ))}
-              </div>
-              <button
-                onClick={async () => {
-                  if (gameState) {
-                    try {
-                      await gameStateApi.delete(gameState._id.toString());
-                    } catch (err) {
-                      console.error('Failed to delete game state:', err);
+            <div className="flex-1 flex justify-end">
+              <div className="flex items-center gap-4">
+                {/* Team scores */}
+                <div className="flex gap-2">
+                  {gameState.teams.map((team, index) => {
+                    const headerColors = getHeaderColors();
+                    return (
+                      <div
+                        key={team.id}
+                        className={`px-4 py-2 rounded-lg font-bold text-center ${
+                          index === gameState.currentTeamIndex
+                            ? `${headerColors.accent} ${headerColors.text === 'text-jeopardy-royal' ? 'text-white' : headerColors.text} border-2 ${headerColors.border}`
+                            : `${headerColors.bg} ${headerColors.text}`
+                        }`}
+                      >
+                        <div className="text-xs uppercase tracking-wide text-center">{team.name.toUpperCase()}</div>
+                        <div className={`text-xl text-center ${team.score < 0 ? 'text-red-500' : ''}`}>
+                          {team.score < 0 ? '-' : ''}${Math.abs(team.score)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                <button
+                  onClick={async () => {
+                    if (gameState) {
+                      try {
+                        await gameStateApi.delete(gameState._id.toString());
+                      } catch (err) {
+                        console.error('Failed to delete game state:', err);
+                      }
                     }
-                  }
-                  router.push('/games');
-                }}
-                className="bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold text-sm"
-              >
-                Exit
-              </button>
+                    router.push('/games');
+                  }}
+                  className={`${getHeaderColors().hover} text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 ${getHeaderColors().border} text-sm`}
+                >
+                  Exit
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -931,6 +974,90 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
           </table>
         </div>
       </div>
+
+      {/* Round Summary Modal */}
+      {showRoundSummary && gameState && rounds.length > 0 && (
+        <div className="fixed inset-0 bg-jeopardy-blue flex items-center justify-center z-50">
+          <div className="w-full h-full flex flex-col items-center justify-center p-8 md:p-12 text-center overflow-hidden relative">
+            <div className="max-w-4xl w-full">
+              {gameState.currentRoundIndex < rounds.length - 1 ? (
+                <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-jeopardy-gold mb-8 font-sans uppercase tracking-wide" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
+                  ROUND {gameState.currentRoundIndex + 1} COMPLETE
+                </h1>
+              ) : (
+                <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold text-jeopardy-gold mb-8 font-sans uppercase tracking-wide" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
+                  GAME OVER
+                </h1>
+              )}
+              
+              <div className="bg-white/10 rounded-2xl p-8 mb-8 backdrop-blur-sm">
+                <h2 className="text-2xl md:text-3xl font-bold text-white mb-6 font-sans uppercase tracking-wide" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
+                  {gameState.currentRoundIndex < rounds.length - 1 ? 'CURRENT STANDINGS' : 'FINAL RESULTS'}
+                </h2>
+                
+                <div className="space-y-4">
+                  {gameState.teams
+                    .sort((a, b) => b.score - a.score)
+                    .map((team, index) => (
+                      <div
+                        key={team.id}
+                        className={`flex items-center justify-between p-4 rounded-lg ${
+                          index === 0
+                            ? 'bg-jeopardy-gold text-jeopardy-blue'
+                            : 'bg-white/20 text-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-4">
+                          <div className={`text-2xl md:text-3xl font-bold ${
+                            index === 0 ? 'text-jeopardy-blue' : 'text-jeopardy-gold'
+                          }`}>
+                            #{index + 1}
+                          </div>
+                          <div className="text-xl md:text-2xl font-bold font-sans uppercase">
+                            {team.name}
+                            {index === 0 && gameState.currentRoundIndex === rounds.length - 1 && (
+                              <span className="ml-3 text-jeopardy-blue">🏆</span>
+                            )}
+                          </div>
+                        </div>
+                        <div className={`text-3xl md:text-4xl font-bold font-sans ${
+                          index === 0 ? 'text-jeopardy-blue' : 'text-jeopardy-gold'
+                        }`}>
+                          ${team.score}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+              
+              {gameState.currentRoundIndex < rounds.length - 1 ? (
+                <button
+                  onClick={handleNextRound}
+                  className="bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-4 px-8 rounded-lg text-xl md:text-2xl uppercase tracking-wide transition-colors shadow-lg border-2 border-jeopardy-gold"
+                >
+                  NEXT ROUND
+                </button>
+              ) : (
+                <button
+                  onClick={async () => {
+                    if (gameState) {
+                      try {
+                        await gameStateApi.delete(gameState._id.toString());
+                      } catch (err) {
+                        console.error('Failed to delete game state:', err);
+                      }
+                    }
+                    router.push('/games');
+                  }}
+                  className="bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-4 px-8 rounded-lg text-xl md:text-2xl uppercase tracking-wide transition-colors shadow-lg border-2 border-jeopardy-gold"
+                >
+                  BACK TO GAMES
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Daily Double Modal */}
       {showDailyDouble && dailyDoubleQuestion && gameState && (
