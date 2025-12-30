@@ -50,7 +50,8 @@ export default function NewGamePage() {
       const response = await gameApi.create({
         name: gameName.trim(),
         theme,
-        rounds, // 'single' or 'double' - backend will create placeholder rounds/categories/questions
+        type: rounds, // 'single' or 'double' - backend will create placeholder rounds/categories/questions
+        userId: "placeholder-user-id", // TODO: Get actual user ID from auth
       });
 
       if (response.success && response.data) {

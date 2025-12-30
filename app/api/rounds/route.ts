@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import RoundModel from "@/models/Round";
+import type { CreateRoundRequest } from "@/types/api";
 
 // GET all rounds
 export async function GET() {
@@ -28,7 +29,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     await connectDB();
-    const body = await request.json();
+    const body: CreateRoundRequest = await request.json();
     const { categoryIds } = body;
 
     const newRound = await RoundModel.create({

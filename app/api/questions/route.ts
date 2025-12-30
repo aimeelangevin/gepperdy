@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import QuestionModel from "@/models/Question";
+import type { CreateQuestionRequest } from "@/types/api";
 
 // GET all questions
 export async function GET() {
@@ -28,7 +29,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     await connectDB();
-    const body = await request.json();
+    const body: CreateQuestionRequest = await request.json();
     const { text, imageUrl, audioUrl, answer, isDailyDouble, points } = body;
 
     if (!answer || points === undefined) {

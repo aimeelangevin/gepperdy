@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import UserModel from "@/models/User";
+import type { CreateUserRequest } from "@/types/api";
 
 // GET all users
 export async function GET() {
@@ -27,7 +28,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     await connectDB();
-    const body = await request.json();
+    const body: CreateUserRequest = await request.json();
     const { name, email, passwordHash } = body;
 
     if (!name || !email || !passwordHash) {
