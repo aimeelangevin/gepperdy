@@ -50,6 +50,8 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
       const uploadResponse = await fetch(presignedUrl, {
         method: 'PUT',
         body: file,
+        credentials: 'omit',
+        mode: 'cors',
         headers: {
           'Content-Type': file.type,
         },
