@@ -1,31 +1,31 @@
 import { NextResponse } from 'next/server';
-import type { User } from "@/types/user";
+import type { Game } from '@/types/game';
 
 // In-memory storage (should match the one in ../route.ts in production)
-let users: User[] = [];
+let games: Game[] = [];
 
-// GET single user by ID
+// GET single game by ID
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const user = users.find((u) => u._id === id);
+  const game = games.find((g) => g._id === id);
 
-  if (!user) {
+  if (!game) {
     return NextResponse.json(
-      { success: false, error: "User not found" },
+      { success: false, error: 'Game not found' },
       { status: 404 }
     );
   }
 
   return NextResponse.json({
     success: true,
-    data: user,
+    data: game,
   });
 }
 
-// PUT - Update user by ID
+// PUT - Update game by ID
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -33,55 +33,54 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, email, passwordHash } = body;
+    const { name, theme, roundIds } = body;
 
-    const userIndex = users.findIndex((u) => u._id === id);
+    const gameIndex = games.findIndex((g) => g._id === id);
 
-    if (userIndex === -1) {
+    if (gameIndex === -1) {
       return NextResponse.json(
-        { success: false, error: "User not found" },
+        { success: false, error: 'Game not found' },
         { status: 404 }
       );
     }
 
-    if (name !== undefined) users[userIndex].name = name;
-    if (email !== undefined) users[userIndex].email = email;
-    if (passwordHash !== undefined)
-      users[userIndex].passwordHash = passwordHash;
+    if (name !== undefined) games[gameIndex].name = name;
+    if (theme !== undefined) games[gameIndex].theme = theme;
+    if (roundIds !== undefined) games[gameIndex].roundIds = roundIds;
 
     return NextResponse.json({
       success: true,
-      data: users[userIndex],
+      data: games[gameIndex],
     });
   } catch (error) {
     return NextResponse.json(
-      { success: false, error: "Invalid request body" },
+      { success: false, error: 'Invalid request body' },
       { status: 400 }
     );
   }
 }
 
-// DELETE user by ID
+// DELETE game by ID
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const userIndex = users.findIndex((u) => u._id === id);
+  const gameIndex = games.findIndex((g) => g._id === id);
 
-  if (userIndex === -1) {
+  if (gameIndex === -1) {
     return NextResponse.json(
-      { success: false, error: "User not found" },
+      { success: false, error: 'Game not found' },
       { status: 404 }
     );
   }
 
-  const deletedUser = users.splice(userIndex, 1)[0];
+  const deletedGame = games.splice(gameIndex, 1)[0];
 
   return NextResponse.json({
     success: true,
-    data: deletedUser,
-    message: "User deleted successfully",
+    data: deletedGame,
+    message: 'Game deleted successfully',
   });
 }
 

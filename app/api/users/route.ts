@@ -1,10 +1,8 @@
 import { NextResponse } from 'next/server';
+import type { User } from "@/types/user";
 
 // In-memory storage (replace with a real database in production)
-let users = [
-  { id: 1, name: 'Alice Johnson', email: 'alice@example.com' },
-  { id: 2, name: 'Bob Smith', email: 'bob@example.com' },
-];
+let users: User[] = [];
 
 // GET all users
 export async function GET() {
@@ -18,30 +16,28 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { name, email } = body;
+    const { name, email, passwordHash } = body;
 
-    if (!name || !email) {
+    if (!name || !email || !passwordHash) {
       return NextResponse.json(
-        { success: false, error: 'Name and email are required' },
+        { success: false, error: "Name, email, and passwordHash are required" },
         { status: 400 }
       );
     }
 
-    const newUser = {
-      id: users.length + 1,
+    const newUser: User = {
+      _id: crypto.randomUUID(),
       name,
       email,
+      passwordHash,
     };
 
     users.push(newUser);
 
-    return NextResponse.json(
-      { success: true, data: newUser },
-      { status: 201 }
-    );
+    return NextResponse.json({ success: true, data: newUser }, { status: 201 });
   } catch (error) {
     return NextResponse.json(
-      { success: false, error: 'Invalid request body' },
+      { success: false, error: "Invalid request body" },
       { status: 400 }
     );
   }

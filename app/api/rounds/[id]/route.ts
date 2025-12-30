@@ -1,31 +1,31 @@
 import { NextResponse } from 'next/server';
-import type { User } from "@/types/user";
+import type { Round } from '@/types/round';
 
 // In-memory storage (should match the one in ../route.ts in production)
-let users: User[] = [];
+let rounds: Round[] = [];
 
-// GET single user by ID
+// GET single round by ID
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const user = users.find((u) => u._id === id);
+  const round = rounds.find((r) => r._id === id);
 
-  if (!user) {
+  if (!round) {
     return NextResponse.json(
-      { success: false, error: "User not found" },
+      { success: false, error: 'Round not found' },
       { status: 404 }
     );
   }
 
   return NextResponse.json({
     success: true,
-    data: user,
+    data: round,
   });
 }
 
-// PUT - Update user by ID
+// PUT - Update round by ID
 export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -33,55 +33,52 @@ export async function PUT(
   try {
     const { id } = await params;
     const body = await request.json();
-    const { name, email, passwordHash } = body;
+    const { categoryIds } = body;
 
-    const userIndex = users.findIndex((u) => u._id === id);
+    const roundIndex = rounds.findIndex((r) => r._id === id);
 
-    if (userIndex === -1) {
+    if (roundIndex === -1) {
       return NextResponse.json(
-        { success: false, error: "User not found" },
+        { success: false, error: 'Round not found' },
         { status: 404 }
       );
     }
 
-    if (name !== undefined) users[userIndex].name = name;
-    if (email !== undefined) users[userIndex].email = email;
-    if (passwordHash !== undefined)
-      users[userIndex].passwordHash = passwordHash;
+    if (categoryIds !== undefined) rounds[roundIndex].categoryIds = categoryIds;
 
     return NextResponse.json({
       success: true,
-      data: users[userIndex],
+      data: rounds[roundIndex],
     });
   } catch (error) {
     return NextResponse.json(
-      { success: false, error: "Invalid request body" },
+      { success: false, error: 'Invalid request body' },
       { status: 400 }
     );
   }
 }
 
-// DELETE user by ID
+// DELETE round by ID
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const userIndex = users.findIndex((u) => u._id === id);
+  const roundIndex = rounds.findIndex((r) => r._id === id);
 
-  if (userIndex === -1) {
+  if (roundIndex === -1) {
     return NextResponse.json(
-      { success: false, error: "User not found" },
+      { success: false, error: 'Round not found' },
       { status: 404 }
     );
   }
 
-  const deletedUser = users.splice(userIndex, 1)[0];
+  const deletedRound = rounds.splice(roundIndex, 1)[0];
 
   return NextResponse.json({
     success: true,
-    data: deletedUser,
-    message: "User deleted successfully",
+    data: deletedRound,
+    message: 'Round deleted successfully',
   });
 }
 
