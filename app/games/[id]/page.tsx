@@ -276,10 +276,11 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     // Clamp wager to valid range (0 to maxWager)
     const finalWager = Math.min(Math.max(wager, 0), maxWager);
     
-    // Create a modified question with the wager amount
+    // Create a modified question with the wager amount overriding the original points
+    // This wager amount will be used for both correct/incorrect answers and steal attempts
     const modifiedQuestion = {
       ...dailyDoubleQuestion.question,
-      points: finalWager,
+      points: finalWager, // Wager replaces original question points
     };
     
     setSelectedQuestion({ ...dailyDoubleQuestion, question: modifiedQuestion });
@@ -291,7 +292,10 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     setIsStealMode(false);
     setOriginalTeamIndex(null);
     setStealTeamIndices([]);
+    // Trigger animation for question display
     setIsAnimating(true);
+    // Reset animation after it completes
+    setTimeout(() => setIsAnimating(false), 600);
   };
 
   const revealAnswer = () => {
@@ -674,24 +678,24 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       {game?.theme === Theme.Christmas && (
         <>
           {/* Snow at bottom - multiple smaller images */}
-          <div className="fixed bottom-0 left-0 right-0 z-0 pointer-events-none flex items-end">
+          <div className="fixed bottom-0 left-0 right-0 z-30 pointer-events-none flex items-end">
             {Array.from({ length: 20 }).map((_, i) => (
               <img 
                 key={i}
                 src="/snow.png" 
                 alt="snow" 
-                className="h-20 md:h-24 lg:h-28 object-contain flex-1" 
+                className="h-12 md:h-16 lg:h-20 object-contain flex-1" 
               />
             ))}
           </div>
           
           {/* Snowman in bottom left */}
-          <div className="fixed bottom-0 left-4 md:left-8 z-10 pointer-events-none">
+          <div className="fixed bottom-0 left-4 md:left-8 z-30 pointer-events-none">
             <img src="/snowman.png" alt="snowman" className="w-20 h-20 md:w-32 md:h-32 lg:w-40 lg:h-40 xl:w-48 xl:h-48 object-contain drop-shadow-lg" />
           </div>
           
           {/* Christmas tree in bottom right */}
-          <div className="fixed bottom-0 right-4 md:right-8 z-10 pointer-events-none">
+          <div className="fixed bottom-0 right-2 md:right-0 z-30 pointer-events-none">
             <img src="/tree.png" alt="christmas tree" className="w-28 h-28 md:w-40 md:h-40 lg:w-56 lg:h-56 xl:w-72 xl:h-72 object-contain drop-shadow-lg" />
           </div>
         </>
@@ -701,17 +705,17 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       {game?.theme === Theme.Birthday && (
         <>
           {/* Banner in top left */}
-          <div className="fixed top-24 left-2 z-10 pointer-events-none" style={{ transform: 'rotate(-30deg)' }}>
+          <div className="fixed top-24 left-2 z-30 pointer-events-none" style={{ transform: 'rotate(-30deg)' }}>
             <img src="/banner.png" alt="banner" className="w-56 h-28 md:w-64 md:h-32 object-contain drop-shadow-lg" />
           </div>
 
           {/* Banner in top right (mirrored) */}
-          <div className="fixed top-24 right-2 z-10 pointer-events-none" style={{ transform: 'rotate(30deg) scaleX(-1)' }}>
+          <div className="fixed top-24 right-2 z-30 pointer-events-none" style={{ transform: 'rotate(30deg) scaleX(-1)' }}>
             <img src="/banner.png" alt="banner" className="w-56 h-28 md:w-64 md:h-32 object-contain drop-shadow-lg" />
           </div>
 
           {/* Present piles at bottom */}
-          <div className="fixed bottom-0 left-0 right-0 z-10 pointer-events-none">
+          <div className="fixed bottom-0 left-0 right-0 z-30 pointer-events-none">
             {/* Left side present pile */}
             <div className="absolute bottom-0 left-8 flex items-end gap-2">
               <img src="/present1.png" alt="present" className="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-md" />
@@ -743,44 +747,44 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       {game?.theme === Theme.Fall && (
         <>
           {/* Top Left Leaf */}
-          <div className="fixed top-12 left-2 z-10 w-24 h-24 opacity-80 pointer-events-none">
+          <div className="fixed top-12 left-2 z-30 w-24 h-24 opacity-80 pointer-events-none">
             <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
           </div>
           {/* Top Right Leaf */}
-          <div className="fixed top-12 right-2 z-10 w-24 h-24 opacity-80 pointer-events-none" style={{ transform: 'rotate(45deg)' }}>
+          <div className="fixed top-12 right-2 z-30 w-24 h-24 opacity-80 pointer-events-none" style={{ transform: 'rotate(45deg)' }}>
             <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
           </div>
           {/* Bottom Left Leaf */}
-          <div className="fixed bottom-24 left-2 z-10 w-24 h-24 opacity-80 pointer-events-none" style={{ transform: 'rotate(180deg)' }}>
+          <div className="fixed bottom-24 left-2 z-30 w-24 h-24 opacity-80 pointer-events-none" style={{ transform: 'rotate(180deg)' }}>
             <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
           </div>
           {/* Bottom Right Leaf */}
-          <div className="fixed bottom-24 right-2 z-10 w-24 h-24 opacity-80 pointer-events-none" style={{ transform: 'rotate(-45deg)' }}>
+          <div className="fixed bottom-24 right-2 z-30 w-24 h-24 opacity-80 pointer-events-none" style={{ transform: 'rotate(-45deg)' }}>
             <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
           </div>
           {/* Left Side Leaves */}
-          <div className="fixed left-2 top-1/2 -translate-y-1/2 z-10 w-20 h-20 opacity-70 pointer-events-none" style={{ transform: 'translateY(-50%) rotate(-90deg)' }}>
+          <div className="fixed left-2 top-1/2 -translate-y-1/2 z-30 w-20 h-20 opacity-70 pointer-events-none" style={{ transform: 'translateY(-50%) rotate(-90deg)' }}>
             <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
           </div>
-          <div className="fixed left-2 top-1/4 z-10 w-16 h-16 opacity-60 pointer-events-none" style={{ transform: 'rotate(12deg)' }}>
+          <div className="fixed left-2 top-1/4 z-30 w-16 h-16 opacity-60 pointer-events-none" style={{ transform: 'rotate(12deg)' }}>
             <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
           </div>
-          <div className="fixed left-2 top-3/4 z-10 w-16 h-16 opacity-60 pointer-events-none" style={{ transform: 'rotate(-12deg)' }}>
+          <div className="fixed left-2 top-3/4 z-30 w-16 h-16 opacity-60 pointer-events-none" style={{ transform: 'rotate(-12deg)' }}>
             <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
           </div>
           {/* Right Side Leaves */}
-          <div className="fixed right-2 top-1/2 -translate-y-1/2 z-10 w-20 h-20 opacity-70 pointer-events-none" style={{ transform: 'translateY(-50%) rotate(90deg)' }}>
+          <div className="fixed right-2 top-1/2 -translate-y-1/2 z-30 w-20 h-20 opacity-70 pointer-events-none" style={{ transform: 'translateY(-50%) rotate(90deg)' }}>
             <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
           </div>
-          <div className="fixed right-2 top-1/4 z-10 w-16 h-16 opacity-60 pointer-events-none" style={{ transform: 'rotate(-12deg)' }}>
+          <div className="fixed right-2 top-1/4 z-30 w-16 h-16 opacity-60 pointer-events-none" style={{ transform: 'rotate(-12deg)' }}>
             <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
           </div>
-          <div className="fixed right-2 top-3/4 z-10 w-16 h-16 opacity-60 pointer-events-none" style={{ transform: 'rotate(12deg)' }}>
+          <div className="fixed right-2 top-3/4 z-30 w-16 h-16 opacity-60 pointer-events-none" style={{ transform: 'rotate(12deg)' }}>
             <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
           </div>
           
           {/* Big Pumpkin */}
-          <div className="fixed bottom-8 right-4 z-10 pointer-events-none">
+          <div className="fixed bottom-8 right-4 z-30 pointer-events-none">
             <img src="/pumpkin.png" alt="pumpkin" className="w-32 h-32 md:w-48 md:h-48 object-contain drop-shadow-lg" />
           </div>
         </>
@@ -907,7 +911,10 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
             background: 'linear-gradient(to bottom, #1e3a8a 0%, #7c3aed 30%, #d946ef 60%, #ea580c 100%)',
           }}
         >
-          <div className="w-full h-full flex flex-col items-center justify-center p-8 md:p-12 text-center overflow-hidden relative">
+          <div 
+            className="w-full h-full flex flex-col items-center justify-center p-8 md:p-12 text-center overflow-hidden relative"
+            onClick={() => !showWagerInput && setShowWagerInput(true)}
+          >
             {/* Light rays */}
             <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
               <div className="absolute top-0 left-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white to-transparent transform -skew-x-12" />
@@ -916,7 +923,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
 
             {!showWagerInput ? (
               /* Daily Double Title */
-              <div className="relative z-10 cursor-pointer" onClick={() => setShowWagerInput(true)}>
+              <div className="relative z-10 cursor-pointer">
                 <h1 
                   className="text-6xl md:text-8xl lg:text-9xl xl:text-[12rem] font-black uppercase tracking-wider"
                   style={{
@@ -943,14 +950,11 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
               /* Wager Input */
               <div className="relative z-10 flex flex-col items-center gap-8">
                 <h2 className="text-white text-3xl md:text-4xl lg:text-5xl font-bold uppercase tracking-wide" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
-                  {gameState.teams[gameState.currentTeamIndex].name.toUpperCase()}
+                  {gameState.teams[gameState.currentTeamIndex].name.toUpperCase()} WAGER
               </h2>
                 <div className="flex flex-col items-center gap-4">
-                  <label className="text-white text-xl md:text-2xl font-semibold uppercase tracking-wide" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
-                    ENTER YOUR WAGER
-                  </label>
-                  <div className="flex items-center gap-4">
-                    <span className="text-white text-3xl md:text-4xl font-bold" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>$</span>
+                  <div className="relative flex items-center justify-center">
+                    <span className="absolute left-0 text-white text-3xl md:text-4xl font-bold -translate-x-full pr-2" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>$</span>
                     <input
                       type="number"
                       value={wagerAmount}
@@ -961,7 +965,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                         }
                       }}
                       autoFocus
-                      className="text-4xl md:text-5xl lg:text-6xl font-bold text-center w-48 md:w-64 lg:w-80 px-4 py-2 rounded-lg border-4 border-white/50 bg-white/10 text-white placeholder-white/50 focus:outline-none focus:border-white focus:bg-white/20"
+                      className="text-4xl md:text-5xl lg:text-6xl font-bold text-center w-48 md:w-64 lg:w-80 px-4 py-2 rounded-lg border-4 border-white/50 bg-white/10 text-white placeholder-white/50 focus:outline-none focus:border-white focus:bg-white/20 [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none [-moz-appearance:textfield]"
                       placeholder="0"
                       min="0"
                       max={Math.max(gameState.teams[gameState.currentTeamIndex]?.score || 0, dailyDoubleQuestion.question.points)}
@@ -975,7 +979,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                     className="mt-4 px-8 py-4 bg-white/30 hover:bg-white/40 text-white text-xl md:text-2xl font-bold uppercase tracking-wide rounded-lg transition-colors shadow-lg"
                     style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}
               >
-                    SUBMIT WAGER
+                    SUBMIT
               </button>
             </div>
               </div>
