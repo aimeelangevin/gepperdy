@@ -472,7 +472,7 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
                   {(() => {
                     const imageUrl = currentRound.categories[editingCell.catIndex].questions[editingCell.qIndex].imageUrl;
                     return imageUrl ? (
-                      <div className="mt-2">
+                      <div className="mt-2 relative inline-block">
                         <img
                           src={imageUrl}
                           alt="Question preview"
@@ -483,9 +483,10 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
                           onClick={() =>
                             updateQuestion(editingCell.catIndex, editingCell.qIndex, { imageUrl: undefined })
                           }
-                          className="mt-2 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                          className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold text-lg leading-none shadow-lg transition-colors"
+                          aria-label="Remove image"
                         >
-                          Remove image
+                          ×
                         </button>
                       </div>
                     ) : null;
@@ -528,7 +529,7 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
                   {(() => {
                     const audioUrl = currentRound.categories[editingCell.catIndex].questions[editingCell.qIndex].audioUrl;
                     return audioUrl ? (
-                      <div className="mt-2">
+                      <div className="mt-2 relative">
                         <audio
                           controls
                           src={audioUrl}
@@ -539,9 +540,10 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
                           onClick={() =>
                             updateQuestion(editingCell.catIndex, editingCell.qIndex, { audioUrl: undefined })
                           }
-                          className="mt-2 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                          className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold text-lg leading-none shadow-lg transition-colors"
+                          aria-label="Remove audio"
                         >
-                          Remove audio
+                          ×
                         </button>
                       </div>
                     ) : null;

@@ -67,8 +67,8 @@ export default function GamesPage() {
       <div className="container mx-auto px-4 py-12">
         {loading ? (
           <div className="text-center py-20">
-            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-jeopardy-gold mx-auto mb-4"></div>
-            <p className="text-jeopardy-gold text-xl font-bold font-jeopardy">Loading games...</p>
+            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-jeopardy-royal mx-auto mb-4"></div>
+            <p className="text-jeopardy-royal text-xl font-bold font-jeopardy">Loading games...</p>
           </div>
         ) : error ? (
           <div className="text-center py-20">
@@ -96,8 +96,17 @@ export default function GamesPage() {
             {games.map((game) => (
               <div
                 key={game._id.toString()}
-                className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-xl border-4 border-jeopardy-gold hover:scale-105 transition-transform cursor-pointer"
+                className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-xl border-4 border-jeopardy-gold hover:scale-105 transition-transform relative"
               >
+                {/* Edit Button - Top Right */}
+                <Link
+                  href={`/games/${game._id.toString()}/edit`}
+                  className="absolute top-3 right-3 bg-jeopardy-blue hover:bg-jeopardy-blue-light text-jeopardy-gold font-bold py-1.5 px-3 rounded-lg transition-colors uppercase tracking-wide text-sm shadow-md z-10"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  Edit
+                </Link>
+
                 <Link href={`/games/${game._id.toString()}`}>
                   <div className="p-6">
                     {/* Theme Icon */}
@@ -138,16 +147,6 @@ export default function GamesPage() {
             ))}
           </div>
         )}
-      </div>
-
-      {/* Back to Home */}
-      <div className="container mx-auto px-4 pb-8">
-        <Link
-          href="/"
-          className="text-jeopardy-blue hover:text-jeopardy-magenta font-bold uppercase tracking-wide inline-block"
-        >
-          ← Back to Home
-        </Link>
       </div>
     </div>
   );
