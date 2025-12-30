@@ -46,11 +46,11 @@ export default function NewGamePage() {
     setError(null);
 
     try {
-      // Create the game in the backend
+      // Create the game in the backend (with placeholder structure)
       const response = await gameApi.create({
         name: gameName.trim(),
         theme,
-        roundIds: [], // Will be populated later when rounds are created
+        rounds, // 'single' or 'double' - backend will create placeholder rounds/categories/questions
       });
 
       if (response.success && response.data) {

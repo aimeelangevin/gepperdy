@@ -1,8 +1,10 @@
 import mongoose, { Schema, Model, InferSchemaType } from "mongoose";
 import { Theme } from "@/types/theme";
+import type { WithId } from "@/lib/mongoose-types";
 
 const GameSchema = new Schema(
   {
+    userId: { type: String, required: true },
     name: { type: String, required: true },
     theme: {
       type: String,
@@ -17,7 +19,9 @@ const GameSchema = new Schema(
 );
 
 type GameDocument = InferSchemaType<typeof GameSchema>;
-export type Game = Omit<GameDocument, "createdAt" | "updatedAt"> & {
+// WithId utility ensures _id is always included (Mongoose adds it automatically to all documents)
+// This is cleaner than manually adding { _id: Types.ObjectId } each time
+export type Game = WithId<Omit<GameDocument, "createdAt" | "updatedAt">> & {
   theme: Theme;
 };
 

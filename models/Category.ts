@@ -1,4 +1,5 @@
 import mongoose, { Schema, Model, InferSchemaType } from "mongoose";
+import type { WithId } from "@/lib/mongoose-types";
 
 const CategorySchema = new Schema(
   {
@@ -11,7 +12,9 @@ const CategorySchema = new Schema(
 );
 
 type CategoryDocument = InferSchemaType<typeof CategorySchema>;
-export type Category = Omit<CategoryDocument, "createdAt" | "updatedAt">;
+export type Category = WithId<
+  Omit<CategoryDocument, "createdAt" | "updatedAt">
+>;
 
 const CategoryModel: Model<CategoryDocument> =
   mongoose.models.Category ||

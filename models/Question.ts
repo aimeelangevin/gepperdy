@@ -1,4 +1,5 @@
 import mongoose, { Schema, Model, InferSchemaType } from "mongoose";
+import type { WithId } from "@/lib/mongoose-types";
 
 const QuestionSchema = new Schema(
   {
@@ -15,7 +16,9 @@ const QuestionSchema = new Schema(
 );
 
 type QuestionDocument = InferSchemaType<typeof QuestionSchema>;
-export type Question = Omit<QuestionDocument, "createdAt" | "updatedAt">;
+export type Question = WithId<
+  Omit<QuestionDocument, "createdAt" | "updatedAt">
+>;
 
 const QuestionModel: Model<QuestionDocument> =
   mongoose.models.Question ||

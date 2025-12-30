@@ -1,4 +1,5 @@
 import mongoose, { Schema, Model, InferSchemaType } from "mongoose";
+import type { WithId } from "@/lib/mongoose-types";
 
 const TeamSchema = new Schema(
   {
@@ -9,7 +10,7 @@ const TeamSchema = new Schema(
 );
 
 type TeamDocument = InferSchemaType<typeof TeamSchema>;
-export type Team = TeamDocument;
+export type Team = WithId<TeamDocument>;
 
 const GameStateSchema = new Schema(
   {
@@ -25,7 +26,7 @@ const GameStateSchema = new Schema(
 );
 
 type GameStateDocument = InferSchemaType<typeof GameStateSchema>;
-export type GameState = Omit<GameStateDocument, "createdAt" | "updatedAt">;
+export type GameState = WithId<Omit<GameStateDocument, "createdAt" | "updatedAt">>;
 
 const GameStateModel: Model<GameStateDocument> =
   mongoose.models.GameState ||

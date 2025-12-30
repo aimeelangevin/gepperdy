@@ -1,4 +1,5 @@
 import mongoose, { Schema, Model, InferSchemaType } from "mongoose";
+import type { WithId } from "@/lib/mongoose-types";
 
 const RoundSchema = new Schema(
   {
@@ -10,7 +11,7 @@ const RoundSchema = new Schema(
 );
 
 type RoundDocument = InferSchemaType<typeof RoundSchema>;
-export type Round = Omit<RoundDocument, "createdAt" | "updatedAt">;
+export type Round = WithId<Omit<RoundDocument, "createdAt" | "updatedAt">>;
 
 const RoundModel: Model<RoundDocument> =
   mongoose.models.Round || mongoose.model<RoundDocument>("Round", RoundSchema);

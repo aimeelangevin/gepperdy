@@ -97,14 +97,22 @@ export const categoryApi = {
 
 // Game API functions
 export const gameApi = {
-  getAll: () => apiFetch<Game[]>("/api/games"),
+  getAllGamesForUser: (userId: string) =>
+    apiFetch<Game[]>(`/api/games?userId=${userId}`),
 
   getById: (id: string) => apiFetch<Game>(`/api/games/${id}`),
 
-  create: (game: Omit<Game, "_id">) =>
+  create: (
+    userId: string,
+    game: {
+      name: string;
+      theme: Game["theme"];
+      type?: "single" | "double";
+    }
+  ) =>
     apiFetch<Game>("/api/games", {
       method: "POST",
-      body: JSON.stringify(game),
+      body: JSON.stringify({ ...game, userId }),
     }),
 
   update: (id: string, game: Partial<Omit<Game, "_id">>) =>

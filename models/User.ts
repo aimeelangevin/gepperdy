@@ -1,4 +1,5 @@
 import mongoose, { Schema, Model, InferSchemaType } from "mongoose";
+import type { WithId } from "@/lib/mongoose-types";
 
 const UserSchema = new Schema(
   {
@@ -12,7 +13,7 @@ const UserSchema = new Schema(
 );
 
 type UserDocument = InferSchemaType<typeof UserSchema>;
-export type User = Omit<UserDocument, "createdAt" | "updatedAt">;
+export type User = WithId<Omit<UserDocument, "createdAt" | "updatedAt">>;
 
 const UserModel: Model<UserDocument> =
   mongoose.models.User || mongoose.model<UserDocument>("User", UserSchema);
