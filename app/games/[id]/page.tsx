@@ -37,10 +37,24 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     qIndex: number;
     question: any;
   } | null>(null);
+  const [showAnswer, setShowAnswer] = useState(false);
+  const [isAnimating, setIsAnimating] = useState(false);
 
   useEffect(() => {
     loadGame();
   }, [id]);
+
+  // Reset animation when question changes
+  useEffect(() => {
+    if (selectedQuestion) {
+      setIsAnimating(true);
+      // Keep animation state true for the duration of the animation
+      const timer = setTimeout(() => setIsAnimating(false), 600);
+      return () => clearTimeout(timer);
+    } else {
+      setIsAnimating(false);
+    }
+  }, [selectedQuestion]);
 
   const loadGame = async () => {
     try {
@@ -169,10 +183,17 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     }
     
     setSelectedQuestion({ catIndex, qIndex, question });
+    setShowAnswer(false);
   };
 
   const closeQuestion = () => {
     setSelectedQuestion(null);
+    setShowAnswer(false);
+    setIsAnimating(false);
+  };
+
+  const revealAnswer = () => {
+    setShowAnswer(true);
   };
 
   // Helper function to get theme-specific cell colors
@@ -428,7 +449,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                   return (
                     <th
                       key={category._id.toString()}
-                      className={`${headerColors.bg} ${headerColors.text} p-4 border-4 ${headerColors.border} font-jeopardy w-[20%]`}
+                      className={`${headerColors.bg} text-white p-6 border-4 ${headerColors.border} font-jeopardy w-[20%] text-2xl md:text-2xl lg:text-2xl font-bold`}
                     >
                       {category.name}
                     </th>
@@ -477,59 +498,50 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
 
       {/* Question Modal */}
       {selectedQuestion && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={closeQuestion}>
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold max-w-2xl w-full p-8" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-start mb-6">
-              <h2 className="text-3xl font-bold text-jeopardy-gold font-jeopardy">
-                ${selectedQuestion.question.points}
-              </h2>
-              <button
-                onClick={closeQuestion}
-                className="text-4xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 leading-none"
-              >
-                ×
-              </button>
-            </div>
-
-            {/* Question Content */}
-            <div className="space-y-4">
-              {selectedQuestion.question.text && (
-                <p className="text-xl text-slate-900 dark:text-white">
-                  {selectedQuestion.question.text}
-                </p>
-              )}
-              
-              {selectedQuestion.question.imageUrl && (
-                <img
-                  src={selectedQuestion.question.imageUrl}
-                  alt="Question"
-                  className="w-full rounded-lg"
-                />
-              )}
-              
-              {selectedQuestion.question.audioUrl && (
-                <audio controls className="w-full">
-                  <source src={selectedQuestion.question.audioUrl} />
-                </audio>
-              )}
-
-              {/* Answer (hidden for now, will add reveal button later) */}
-              <div className="mt-6 pt-6 border-t-2 border-slate-200 dark:border-slate-700">
-                <p className="text-lg font-bold text-slate-900 dark:text-white mb-2">Answer:</p>
-                <p className="text-lg text-slate-700 dark:text-slate-300">
-                  {selectedQuestion.question.answer}
+        <div 
+          key={`question-${selectedQuestion.question._id}-${selectedQuestion.catIndex}-${selectedQuestion.qIndex}`}
+          className="fixed inset-0 bg-jeopardy-blue flex items-center justify-center z-50 cursor-pointer spin-in"
+          onClick={showAnswer ? closeQuestion : revealAnswer}
+        >
+          <div className="w-full h-full flex flex-col items-center justify-center p-8 md:p-12 text-center overflow-hidden">
+            {!showAnswer ? (
+              /* Question Display */
+              <div className="w-full h-full flex flex-col items-center justify-center gap-4 md:gap-6">
+                {selectedQuestion.question.text && (
+                  <p className="text-white text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-jeopardy font-bold leading-tight px-4" style={{ textShadow: '4px 4px 8px rgba(0,0,0,0.5)' }}>
+                    {selectedQuestion.question.text}
+                  </p>
+                )}
+                {selectedQuestion.question.imageUrl && (
+                  <div className="flex-1 flex items-center justify-center w-full px-4 min-h-0">
+                    <img
+                      src={selectedQuestion.question.imageUrl}
+                      alt="Question"
+                      className="max-w-full max-h-full w-auto h-auto object-contain rounded-lg"
+                      style={{ maxHeight: '60vh' }}
+                    />
+                  </div>
+                )}
+                {selectedQuestion.question.audioUrl && (
+                  <audio controls autoPlay className="w-full max-w-2xl">
+                    <source src={selectedQuestion.question.audioUrl} />
+                  </audio>
+                )}
+                <p className="text-white/70 text-lg md:text-xl font-jeopardy uppercase tracking-wide mt-auto pb-4">
+                  Click to reveal answer
                 </p>
               </div>
-            </div>
-
-            <div className="mt-8 flex gap-4">
-              <button
-                onClick={closeQuestion}
-                className="flex-1 bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold"
-              >
-                Close
-              </button>
-            </div>
+            ) : (
+              /* Answer Display */
+              <>
+                <p className="text-white text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-jeopardy font-bold leading-tight mb-8 px-4" style={{ textShadow: '4px 4px 8px rgba(0,0,0,0.5)' }}>
+                  {selectedQuestion.question.answer}
+                </p>
+                <p className="text-white/70 text-lg md:text-xl font-jeopardy uppercase tracking-wide">
+                  Click to close
+                </p>
+              </>
+            )}
           </div>
         </div>
       )}
