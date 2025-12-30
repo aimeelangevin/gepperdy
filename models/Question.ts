@@ -6,7 +6,7 @@ const QuestionSchema = new Schema(
     text: { type: String },
     imageUrl: { type: String },
     audioUrl: { type: String },
-    answer: { type: String, required: true },
+    answer: { type: String },
     isDailyDouble: { type: Boolean, default: false },
     points: { type: Number, required: true },
   },
@@ -25,4 +25,3 @@ const QuestionModel: Model<QuestionDocument> =
   mongoose.model<QuestionDocument>("Question", QuestionSchema);
 
 export default QuestionModel;
-

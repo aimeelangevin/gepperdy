@@ -1,74 +1,141 @@
 'use client';
 
-import { use, useState, useEffect } from 'react';
+import { use, useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { Category } from '@/models/Category';
 import { Question } from '@/models/Question';
 import { Round } from '@/models/Round';
-import { gameApi } from '@/lib/api';
-
-// Dummy initial data for a 5x5 grid
-const createEmptyRound = (isDouble: boolean): Round & { categories: (Category & { questions: Question[] })[] } => {
-  const pointMultiplier = isDouble ? 2 : 1;
-  const categories: (Category & { questions: Question[] })[] = [];
-  
-  for (let catIndex = 0; catIndex < 5; catIndex++) {
-    const questions: Question[] = [];
-    for (let qIndex = 0; qIndex < 5; qIndex++) {
-      questions.push({
-        _id: `q-${catIndex}-${qIndex}`,
-        text: '',
-        answer: '',
-        isDailyDouble: false,
-        points: (qIndex + 1) * 100 * pointMultiplier,
-      });
-    }
-    
-    categories.push({
-      _id: `cat-${catIndex}`,
-      name: `Category ${catIndex + 1}`,
-      questionIds: questions.map(q => q._id),
-      questions,
-    });
-  }
-  
-  return {
-    _id: 'round-1',
-    categoryIds: categories.map(c => c._id),
-    categories,
-  };
-};
+import { gameApi, roundApi, categoryApi, questionApi } from '@/lib/api';
+import { Game } from '@/models/Game';
 
 type ExtendedRound = Round & { categories: (Category & { questions: Question[] })[] };
 
 export default function GameEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const [gameName, setGameName] = useState<string>('Loading...');
-  const [rounds, setRounds] = useState<ExtendedRound[]>([
-    createEmptyRound(false),
-    createEmptyRound(true),
-  ]);
+  const [game, setGame] = useState<Game | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [rounds, setRounds] = useState<ExtendedRound[]>([]);
   const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
   const [editingCell, setEditingCell] = useState<{ catIndex: number; qIndex: number } | null>(null);
   const [editingCategory, setEditingCategory] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const saveTimeoutRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
 
   useEffect(() => {
-    const fetchGame = async () => {
-      const response = await gameApi.getById(id);
-      if (response.success && response.data) {
-        setGameName(response.data.name);
+    const fetchGameData = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const response = await gameApi.getById(id);
+        if (response.success && response.data) {
+          setGame(response.data);
+          
+          // Fetch all rounds, categories, and questions
+          if (response.data.roundIds && response.data.roundIds.length > 0) {
+            const extendedRounds: ExtendedRound[] = [];
+            
+            for (const roundId of response.data.roundIds) {
+              // Fetch round
+              const roundResponse = await roundApi.getById(roundId.toString());
+              if (!roundResponse.success || !roundResponse.data) continue;
+              
+              const round = roundResponse.data;
+              const categories: (Category & { questions: Question[] })[] = [];
+              
+              // Fetch categories for this round
+              for (const categoryId of round.categoryIds) {
+                const categoryResponse = await categoryApi.getById(categoryId.toString());
+                if (!categoryResponse.success || !categoryResponse.data) continue;
+                
+                const category = categoryResponse.data;
+                const questions: Question[] = [];
+                
+                // Fetch questions for this category
+                for (const questionId of category.questionIds) {
+                  const questionResponse = await questionApi.getById(questionId.toString());
+                  if (questionResponse.success && questionResponse.data) {
+                    questions.push(questionResponse.data);
+                  }
+                }
+                
+                categories.push({
+                  ...category,
+                  questions,
+                });
+              }
+              
+              extendedRounds.push({
+                ...round,
+                categories,
+              });
+            }
+            
+            setRounds(extendedRounds);
+          }
+        } else {
+          setError(response.error || 'Failed to load game');
+        }
+      } catch (err) {
+        setError('An unexpected error occurred');
+      } finally {
+        setLoading(false);
       }
     };
-    fetchGame();
+    
+    fetchGameData();
   }, [id]);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(saveTimeoutRef.current).forEach(timeout => {
+        if (timeout) clearTimeout(timeout);
+      });
+    };
+  }, []);
 
   const currentRound = rounds[currentRoundIndex];
   const isDoubleJeopardy = currentRoundIndex === 1;
+  
+  // If no rounds are loaded yet, show loading
+  if (!currentRound) {
+    return (
+      <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-jeopardy-royal mx-auto mb-4"></div>
+          <p className="text-jeopardy-royal text-xl font-bold font-jeopardy">Loading game...</p>
+        </div>
+      </div>
+    );
+  }
 
   const updateCategoryName = (catIndex: number, newName: string) => {
     const newRounds = [...rounds];
     newRounds[currentRoundIndex].categories[catIndex].name = newName;
     setRounds(newRounds);
+    
+    // Autosave with debounce
+    const categoryId = newRounds[currentRoundIndex].categories[catIndex]._id.toString();
+    const key = `category-${categoryId}`;
+    
+    // Clear existing timeout for this category
+    if (saveTimeoutRef.current[key]) {
+      clearTimeout(saveTimeoutRef.current[key]);
+    }
+    
+    // Set new timeout to save after 500ms of no typing
+    saveTimeoutRef.current[key] = setTimeout(async () => {
+      setSaving(true);
+      try {
+        await categoryApi.update(categoryId, { name: newName });
+      } catch (err) {
+        console.error('Failed to save category name:', err);
+      } finally {
+        setSaving(false);
+      }
+    }, 500);
   };
 
   const updateQuestion = (catIndex: number, qIndex: number, updates: Partial<Question>) => {
@@ -78,6 +145,34 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
       ...updates,
     };
     setRounds(newRounds);
+    
+    // Autosave with debounce
+    const questionId = newRounds[currentRoundIndex].categories[catIndex].questions[qIndex]._id.toString();
+    const key = `question-${questionId}`;
+    
+    // Clear existing timeout for this question
+    if (saveTimeoutRef.current[key]) {
+      clearTimeout(saveTimeoutRef.current[key]);
+    }
+    
+    // Set new timeout to save after 500ms of no typing
+    saveTimeoutRef.current[key] = setTimeout(async () => {
+      setSaving(true);
+      try {
+        const question = newRounds[currentRoundIndex].categories[catIndex].questions[qIndex];
+        await questionApi.update(questionId, {
+          text: question.text,
+          answer: question.answer,
+          imageUrl: question.imageUrl,
+          audioUrl: question.audioUrl,
+          isDailyDouble: question.isDailyDouble,
+        });
+      } catch (err) {
+        console.error('Failed to save question:', err);
+      } finally {
+        setSaving(false);
+      }
+    }, 500);
   };
 
   const openCellEditor = (catIndex: number, qIndex: number) => {
@@ -88,6 +183,40 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
     setEditingCell(null);
   };
 
+
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-jeopardy-royal mx-auto mb-4"></div>
+          <p className="text-jeopardy-royal text-xl font-bold font-jeopardy">Loading game...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !game) {
+    return (
+      <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold p-8 max-w-md text-center">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-4 font-jeopardy">
+            Error Loading Game
+          </h1>
+          <p className="text-slate-600 dark:text-slate-400 mb-6">{error || 'Game not found'}</p>
+          <Link
+            href="/games"
+            className="inline-block bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-3 px-8 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold"
+          >
+            ← Back to Games
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark">
       {/* Header */}
@@ -96,53 +225,61 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold text-jeopardy-gold mb-1 tracking-wide font-jeopardy" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
-                {gameName}
+                {game.name}
               </h1>
             </div>
-            <div className="flex gap-3">
+            <div className="flex gap-3 items-center">
+              {saving && (
+                <div className="flex items-center gap-2 text-jeopardy-gold">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-jeopardy-gold"></div>
+                  <span className="text-sm font-semibold">Saving...</span>
+                </div>
+              )}
+              {!saving && (
+                <div className="flex items-center gap-2 text-jeopardy-gold">
+                  <span className="text-sm font-semibold">✓ All changes saved</span>
+                </div>
+              )}
               <Link
                 href="/games"
-                className="bg-slate-300 hover:bg-slate-400 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-bold py-2 px-6 rounded-lg transition-colors uppercase tracking-wide"
+                className="flex items-center bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold"
               >
-                Cancel
+                Back to all games
               </Link>
-              <button
-                className="bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold"
-              >
-                Save Game
-              </button>
             </div>
           </div>
         </div>
       </div>
 
       {/* Round Selector */}
-      <div className="bg-white dark:bg-slate-900 border-b-2 border-jeopardy-gold/30 py-4">
-        <div className="container mx-auto px-4">
-          <div className="flex gap-4 justify-center">
-            <button
-              onClick={() => setCurrentRoundIndex(0)}
-              className={`px-8 py-3 rounded-lg font-bold uppercase tracking-wide transition-all ${
-                currentRoundIndex === 0
-                  ? 'bg-jeopardy-blue text-jeopardy-gold border-2 border-jeopardy-gold'
-                  : 'bg-slate-200 dark:bg-slate-700 border-2 border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
-              }`}
-            >
-              Single Jeopardy
-            </button>
-            <button
-              onClick={() => setCurrentRoundIndex(1)}
-              className={`px-8 py-3 rounded-lg font-bold uppercase tracking-wide transition-all ${
-                currentRoundIndex === 1
-                  ? 'bg-jeopardy-blue text-jeopardy-gold border-2 border-jeopardy-gold'
-                  : 'bg-slate-200 dark:bg-slate-700 border-2 border-slate-700text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
-              }`}
-            >
-              Double Jeopardy
-            </button>
+      {rounds.length > 1 && (
+        <div className="bg-white dark:bg-slate-900 border-b-2 border-jeopardy-gold/30 py-4">
+          <div className="container mx-auto px-4">
+            <div className="flex gap-4 justify-center">
+              <button
+                onClick={() => setCurrentRoundIndex(0)}
+                className={`px-8 py-3 rounded-lg font-bold uppercase tracking-wide transition-all ${
+                  currentRoundIndex === 0
+                    ? 'bg-jeopardy-blue text-jeopardy-gold border-2 border-jeopardy-gold'
+                    : 'bg-slate-200 dark:bg-slate-700 border-2 border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
+                }`}
+              >
+                Single Jeopardy
+              </button>
+              <button
+                onClick={() => setCurrentRoundIndex(1)}
+                className={`px-8 py-3 rounded-lg font-bold uppercase tracking-wide transition-all ${
+                  currentRoundIndex === 1
+                    ? 'bg-jeopardy-blue text-jeopardy-gold border-2 border-jeopardy-gold'
+                    : 'bg-slate-200 dark:bg-slate-700 border-2 border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
+                }`}
+              >
+                Double Jeopardy
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
       {/* Game Board */}
       <div className="container mx-auto px-4 py-8">
@@ -152,7 +289,7 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
               <tr>
                 {currentRound.categories.map((category, catIndex) => (
                   <th
-                    key={category._id}
+                    key={category._id.toString()}
                     className="bg-jeopardy-blue text-jeopardy-gold p-4 border-4 border-jeopardy-royal font-jeopardy cursor-pointer hover:bg-jeopardy-blue-light transition-colors w-[20%]"
                     onClick={() => setEditingCategory(catIndex)}
                   >
@@ -200,11 +337,6 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
                             ✓ Added
                           </div>
                         )}
-                        {question.isDailyDouble && (
-                          <div className="mt-1 text-jeopardy-gold text-xs font-bold">
-                            DAILY DOUBLE
-                          </div>
-                        )}
                       </td>
                     );
                   })}
@@ -244,10 +376,10 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
             </div>
 
             <div className="p-6 space-y-6">
-              {/* Question */}
+              {/* Question Text (Optional) */}
               <div>
                 <label className="block text-lg font-bold text-slate-900 dark:text-white mb-2 uppercase tracking-wide font-jeopardy">
-                  Question
+                  Question Text <span className="text-sm normal-case text-slate-500">(optional)</span>
                 </label>
                 <textarea
                   value={currentRound.categories[editingCell.catIndex].questions[editingCell.qIndex].text || ''}
@@ -255,8 +387,94 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
                     updateQuestion(editingCell.catIndex, editingCell.qIndex, { text: e.target.value })
                   }
                   className="w-full px-4 py-3 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-jeopardy-magenta dark:focus:border-jeopardy-gold focus:outline-none transition-colors text-lg min-h-24"
-                  placeholder="Enter the question..."
+                  placeholder="Enter the question text (optional)..."
                 />
+              </div>
+
+              {/* Image Upload (Optional) */}
+              <div>
+                <label className="block text-lg font-bold text-slate-900 dark:text-white mb-2 uppercase tracking-wide font-jeopardy">
+                  Image <span className="text-sm normal-case text-slate-500">(optional)</span>
+                </label>
+                <div className="space-y-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        // Create a preview URL (in production, upload to server)
+                        const imageUrl = URL.createObjectURL(file);
+                        updateQuestion(editingCell.catIndex, editingCell.qIndex, { imageUrl });
+                      }
+                    }}
+                    className="w-full px-4 py-3 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-jeopardy-blue file:text-jeopardy-gold hover:file:bg-jeopardy-blue-light cursor-pointer"
+                  />
+                  {(() => {
+                    const imageUrl = currentRound.categories[editingCell.catIndex].questions[editingCell.qIndex].imageUrl;
+                    return imageUrl ? (
+                      <div className="mt-2">
+                        <img
+                          src={imageUrl}
+                          alt="Question preview"
+                          className="max-w-full h-auto rounded-lg border-2 border-jeopardy-gold/30"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateQuestion(editingCell.catIndex, editingCell.qIndex, { imageUrl: undefined })
+                          }
+                          className="mt-2 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                        >
+                          Remove image
+                        </button>
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              </div>
+
+              {/* Audio Upload (Optional) */}
+              <div>
+                <label className="block text-lg font-bold text-slate-900 dark:text-white mb-2 uppercase tracking-wide font-jeopardy">
+                  Audio <span className="text-sm normal-case text-slate-500">(optional)</span>
+                </label>
+                <div className="space-y-3">
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        // Create a preview URL (in production, upload to server)
+                        const audioUrl = URL.createObjectURL(file);
+                        updateQuestion(editingCell.catIndex, editingCell.qIndex, { audioUrl });
+                      }
+                    }}
+                    className="w-full px-4 py-3 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-jeopardy-blue file:text-jeopardy-gold hover:file:bg-jeopardy-blue-light cursor-pointer"
+                  />
+                  {(() => {
+                    const audioUrl = currentRound.categories[editingCell.catIndex].questions[editingCell.qIndex].audioUrl;
+                    return audioUrl ? (
+                      <div className="mt-2">
+                        <audio
+                          controls
+                          src={audioUrl}
+                          className="w-full"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateQuestion(editingCell.catIndex, editingCell.qIndex, { audioUrl: undefined })
+                          }
+                          className="mt-2 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                        >
+                          Remove audio
+                        </button>
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
               </div>
 
               {/* Answer */}
@@ -266,30 +484,14 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
                 </label>
                 <input
                   type="text"
-                  value={currentRound.categories[editingCell.catIndex].questions[editingCell.qIndex].answer}
+                  value={currentRound.categories[editingCell.catIndex].questions[editingCell.qIndex].answer || ''}
                   onChange={(e) =>
                     updateQuestion(editingCell.catIndex, editingCell.qIndex, { answer: e.target.value })
                   }
                   className="w-full px-4 py-3 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-jeopardy-magenta dark:focus:border-jeopardy-gold focus:outline-none transition-colors text-lg"
                   placeholder="What is...?"
+                  required
                 />
-              </div>
-
-              {/* Daily Double Checkbox */}
-              <div>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={currentRound.categories[editingCell.catIndex].questions[editingCell.qIndex].isDailyDouble}
-                    onChange={(e) =>
-                      updateQuestion(editingCell.catIndex, editingCell.qIndex, { isDailyDouble: e.target.checked })
-                    }
-                    className="w-5 h-5 text-jeopardy-magenta border-slate-300 rounded focus:ring-jeopardy-gold"
-                  />
-                  <span className="text-lg font-bold text-slate-900 dark:text-white uppercase tracking-wide font-jeopardy">
-                    Daily Double
-                  </span>
-                </label>
               </div>
 
               {/* Action Buttons */}
@@ -306,15 +508,6 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
         </div>
       )}
 
-      {/* Back Link */}
-      <div className="container mx-auto px-4 pb-8">
-        <Link
-          href="/games"
-          className="text-jeopardy-blue hover:text-jeopardy-magenta font-bold uppercase tracking-wide inline-block"
-        >
-          ← Back to Games
-        </Link>
-      </div>
     </div>
   );
 }

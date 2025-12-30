@@ -1,37 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Game } from '@/models/Game';
 import { Theme } from '@/types/theme';
-
-// Dummy data
-const DUMMY_GAMES: Game[] = [
-  {
-    _id: '1',
-    name: 'Holiday Trivia Spectacular',
-    theme: Theme.Christmas,
-    roundIds: ['r1', 'r2'],
-  },
-  {
-    _id: '2',
-    name: 'Classic Jeopardy',
-    theme: Theme.Classic,
-    roundIds: ['r1'],
-  },
-  {
-    _id: '3',
-    name: 'Autumn Knowledge Challenge',
-    theme: Theme.Fall,
-    roundIds: ['r1', 'r2'],
-  },
-  {
-    _id: '4',
-    name: 'Birthday Bash Quiz',
-    theme: Theme.Birthday,
-    roundIds: ['r1'],
-  },
-];
+import { gameApi } from '@/lib/api';
 
 const THEME_ICONS: Record<Theme, string> = {
   [Theme.Classic]: '🎯',
@@ -42,7 +15,31 @@ const THEME_ICONS: Record<Theme, string> = {
 
 
 export default function GamesPage() {
-  const [games] = useState<Game[]>(DUMMY_GAMES);
+  const [games, setGames] = useState<Game[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchGames = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const response = await gameApi.getAllGamesForUser("hardcoded-user-id");
+        if (response.success && response.data) {
+          setGames(response.data);
+        } else {
+          setError(response.error || 'Failed to load games');
+        }
+      } catch (err) {
+        setError('An unexpected error occurred');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchGames();
+  }, []);
 
   return (
     <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark">
@@ -68,10 +65,25 @@ export default function GamesPage() {
 
       {/* Games Grid */}
       <div className="container mx-auto px-4 py-12">
-        {games.length === 0 ? (
+        {loading ? (
           <div className="text-center py-20">
-            <div className="text-6xl mb-4">🎮</div>
-            <p className="text-white/70 text-xl mb-6">No games yet</p>
+            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-jeopardy-gold mx-auto mb-4"></div>
+            <p className="text-jeopardy-gold text-xl font-bold font-jeopardy">Loading games...</p>
+          </div>
+        ) : error ? (
+          <div className="text-center py-20">
+            <div className="text-6xl mb-4">⚠️</div>
+            <p className="text-white/70 text-xl mb-6">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="inline-block bg-jeopardy-gold hover:bg-jeopardy-gold-light text-jeopardy-blue font-bold py-3 px-8 rounded-lg transition-colors shadow-lg uppercase tracking-wide"
+            >
+              Retry
+            </button>
+          </div>
+        ) : games.length === 0 ? (
+          <div className="text-center py-20">
+            <p className="text-jeopardy-blue/70 text-xl mb-6">No games yet</p>
             <Link
               href="/games/new"
               className="inline-block bg-jeopardy-gold hover:bg-jeopardy-gold-light text-jeopardy-blue font-bold py-3 px-8 rounded-lg transition-colors shadow-lg uppercase tracking-wide"
@@ -83,10 +95,10 @@ export default function GamesPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {games.map((game) => (
               <div
-                key={game._id}
+                key={game._id.toString()}
                 className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-xl border-4 border-jeopardy-gold hover:scale-105 transition-transform cursor-pointer"
               >
-                <Link href={`/games/${game._id}`}>
+                <Link href={`/games/${game._id.toString()}`}>
                   <div className="p-6">
                     {/* Theme Icon */}
                     <div className="text-5xl mb-4 text-center">
