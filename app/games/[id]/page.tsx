@@ -11,6 +11,7 @@ import type { GameState, Team } from '@/models/GameState';
 import { Theme } from '@/types/theme';
 import Link from 'next/link';
 import ProtectedRoute from '@/components/ProtectedRoute';
+import { randomUUID } from 'crypto';
 
 type ExtendedRound = Round & {
   categories: (Category & { questions: Question[] })[];
@@ -111,14 +112,15 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
 
   const handleTeamSetup = async () => {
     try {
-      const teams = teamNames.slice(0, numTeams).map((name, index) => ({
+      const teams: Team[] = teamNames.slice(0, numTeams).map((name, index) => ({
+        id: randomUUID(),
         name: name.trim() || `Team ${index + 1}`,
         score: 0,
       }));
 
       const response = await gameStateApi.create({
         gameId: id,
-        teams: teams as any, // API will add _id
+        teams: teams,
         currentTeamIndex: 0,
         currentRoundIndex: 0,
         completedQuestionIds: [],
@@ -380,7 +382,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                 {game.name}
               </h1>
               <p className="text-jeopardy-gold text-sm">
-                {currentTeam.name}'s Turn
+                {currentTeam.name}&apos;s Turn
               </p>
             </div>
             <div className="flex items-center gap-4">
@@ -388,7 +390,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
               <div className="flex gap-2">
                 {gameState.teams.map((team, index) => (
                   <div
-                    key={team._id.toString()}
+                    key={team.id}
                     className={`px-4 py-2 rounded-lg font-bold ${
                       index === gameState.currentTeamIndex
                         ? 'bg-jeopardy-gold text-jeopardy-blue border-2 border-jeopardy-blue'

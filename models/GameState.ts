@@ -3,14 +3,14 @@ import type { WithId } from "@/lib/mongoose-types";
 
 const TeamSchema = new Schema(
   {
+    id: { type: String, required: true },
     name: { type: String, required: true },
     score: { type: Number, default: 0 },
   },
-  { _id: true }
+  { _id: false }
 );
 
-type TeamDocument = InferSchemaType<typeof TeamSchema>;
-export type Team = WithId<TeamDocument>;
+export type Team = InferSchemaType<typeof TeamSchema>;
 
 const GameStateSchema = new Schema(
   {
