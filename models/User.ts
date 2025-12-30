@@ -12,9 +12,7 @@ const UserSchema = new Schema(
 );
 
 type UserDocument = InferSchemaType<typeof UserSchema>;
-export type User = Omit<UserDocument, "_id" | "createdAt" | "updatedAt"> & {
-  _id: string;
-};
+export type User = Omit<UserDocument, "createdAt" | "updatedAt">;
 
 const UserModel: Model<UserDocument> =
   mongoose.models.User || mongoose.model<UserDocument>("User", UserSchema);

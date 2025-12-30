@@ -6,23 +6,11 @@ import GameStateModel from "@/models/GameState";
 export async function GET() {
   try {
     await connectDB();
-    const gameStates = await GameStateModel.find({});
-    const gameStatesData = gameStates.map((gameState) => ({
-      _id: gameState._id.toString(),
-      gameId: gameState.gameId,
-      teams: gameState.teams.map((team: any) => ({
-        _id: team._id.toString(),
-        name: team.name,
-        score: team.score,
-      })),
-      currentTeamIndex: gameState.currentTeamIndex,
-      currentRoundIndex: gameState.currentRoundIndex,
-      completedQuestionIds: gameState.completedQuestionIds,
-    }));
+    const gameStates = await GameStateModel.find({}).lean();
 
     return NextResponse.json({
       success: true,
-      data: gameStatesData,
+      data: gameStates,
     });
   } catch (error) {
     return NextResponse.json(
@@ -69,18 +57,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: true,
-        data: {
-          _id: newGameState._id.toString(),
-          gameId: newGameState.gameId,
-          teams: newGameState.teams.map((team: any) => ({
-            _id: team._id.toString(),
-            name: team.name,
-            score: team.score,
-          })),
-          currentTeamIndex: newGameState.currentTeamIndex,
-          currentRoundIndex: newGameState.currentRoundIndex,
-          completedQuestionIds: newGameState.completedQuestionIds,
-        },
+        data: newGameState.toObject(),
       },
       { status: 201 }
     );

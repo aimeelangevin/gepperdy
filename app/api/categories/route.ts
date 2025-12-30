@@ -6,16 +6,11 @@ import CategoryModel from "@/models/Category";
 export async function GET() {
   try {
     await connectDB();
-    const categories = await CategoryModel.find({});
-    const categoriesData = categories.map((category) => ({
-      _id: category._id.toString(),
-      name: category.name,
-      questionIds: category.questionIds,
-    }));
+    const categories = await CategoryModel.find({}).lean();
 
     return NextResponse.json({
       success: true,
-      data: categoriesData,
+      data: categories,
     });
   } catch (error) {
     return NextResponse.json(
@@ -51,11 +46,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: true,
-        data: {
-          _id: newCategory._id.toString(),
-          name: newCategory.name,
-          questionIds: newCategory.questionIds,
-        },
+        data: newCategory.toObject(),
       },
       { status: 201 }
     );

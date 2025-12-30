@@ -10,7 +10,7 @@ export async function GET(
   try {
     await connectDB();
     const { gameId } = await params;
-    const gameState = await GameStateModel.findOne({ gameId });
+    const gameState = await GameStateModel.findOne({ gameId }).lean();
 
     if (!gameState) {
       return NextResponse.json(
@@ -21,18 +21,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: gameState._id.toString(),
-        gameId: gameState.gameId,
-        teams: gameState.teams.map((team: any) => ({
-          _id: team._id.toString(),
-          name: team.name,
-          score: team.score,
-        })),
-        currentTeamIndex: gameState.currentTeamIndex,
-        currentRoundIndex: gameState.currentRoundIndex,
-        completedQuestionIds: gameState.completedQuestionIds,
-      },
+      data: gameState,
     });
   } catch (error) {
     return NextResponse.json(

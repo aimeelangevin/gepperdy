@@ -10,7 +10,7 @@ export async function GET(
   try {
     await connectDB();
     const { id } = await params;
-    const round = await RoundModel.findById(id);
+    const round = await RoundModel.findById(id).lean();
 
     if (!round) {
       return NextResponse.json(
@@ -21,17 +21,13 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: round._id.toString(),
-        categoryIds: round.categoryIds,
-      },
+      data: round,
     });
   } catch (error) {
     return NextResponse.json(
       {
         success: false,
-        error:
-          error instanceof Error ? error.message : "Failed to fetch round",
+        error: error instanceof Error ? error.message : "Failed to fetch round",
       },
       { status: 500 }
     );
@@ -55,7 +51,7 @@ export async function PUT(
         ...(categoryIds !== undefined && { categoryIds }),
       },
       { new: true, runValidators: true }
-    );
+    ).lean();
 
     if (!round) {
       return NextResponse.json(
@@ -66,10 +62,7 @@ export async function PUT(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: round._id.toString(),
-        categoryIds: round.categoryIds,
-      },
+      data: round,
     });
   } catch (error) {
     return NextResponse.json(
@@ -91,7 +84,7 @@ export async function DELETE(
   try {
     await connectDB();
     const { id } = await params;
-    const deletedRound = await RoundModel.findByIdAndDelete(id);
+    const deletedRound = await RoundModel.findByIdAndDelete(id).lean();
 
     if (!deletedRound) {
       return NextResponse.json(
@@ -102,10 +95,7 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: deletedRound._id.toString(),
-        categoryIds: deletedRound.categoryIds,
-      },
+      data: deletedRound,
       message: "Round deleted successfully",
     });
   } catch (error) {

@@ -17,11 +17,7 @@ const GameSchema = new Schema(
 );
 
 type GameDocument = InferSchemaType<typeof GameSchema>;
-export type Game = Omit<
-  GameDocument,
-  "_id" | "createdAt" | "updatedAt"
-> & {
-  _id: string;
+export type Game = Omit<GameDocument, "createdAt" | "updatedAt"> & {
   theme: Theme;
 };
 

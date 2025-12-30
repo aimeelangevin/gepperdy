@@ -10,7 +10,7 @@ export async function GET(
   try {
     await connectDB();
     const { id } = await params;
-    const category = await CategoryModel.findById(id);
+    const category = await CategoryModel.findById(id).lean();
 
     if (!category) {
       return NextResponse.json(
@@ -21,11 +21,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: category._id.toString(),
-        name: category.name,
-        questionIds: category.questionIds,
-      },
+      data: category,
     });
   } catch (error) {
     return NextResponse.json(
@@ -57,7 +53,7 @@ export async function PUT(
         ...(questionIds !== undefined && { questionIds }),
       },
       { new: true, runValidators: true }
-    );
+    ).lean();
 
     if (!category) {
       return NextResponse.json(
@@ -68,11 +64,7 @@ export async function PUT(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: category._id.toString(),
-        name: category.name,
-        questionIds: category.questionIds,
-      },
+      data: category,
     });
   } catch (error) {
     return NextResponse.json(
@@ -94,7 +86,7 @@ export async function DELETE(
   try {
     await connectDB();
     const { id } = await params;
-    const deletedCategory = await CategoryModel.findByIdAndDelete(id);
+    const deletedCategory = await CategoryModel.findByIdAndDelete(id).lean();
 
     if (!deletedCategory) {
       return NextResponse.json(
@@ -105,11 +97,7 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: deletedCategory._id.toString(),
-        name: deletedCategory.name,
-        questionIds: deletedCategory.questionIds,
-      },
+      data: deletedCategory,
       message: "Category deleted successfully",
     });
   } catch (error) {

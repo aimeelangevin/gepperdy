@@ -9,7 +9,7 @@ const TeamSchema = new Schema(
 );
 
 type TeamDocument = InferSchemaType<typeof TeamSchema>;
-export type Team = Omit<TeamDocument, "_id"> & { _id: string };
+export type Team = TeamDocument;
 
 const GameStateSchema = new Schema(
   {
@@ -25,13 +25,7 @@ const GameStateSchema = new Schema(
 );
 
 type GameStateDocument = InferSchemaType<typeof GameStateSchema>;
-export type GameState = Omit<
-  GameStateDocument,
-  "_id" | "createdAt" | "updatedAt"
-> & {
-  _id: string;
-  teams: Team[];
-};
+export type GameState = Omit<GameStateDocument, "createdAt" | "updatedAt">;
 
 const GameStateModel: Model<GameStateDocument> =
   mongoose.models.GameState ||

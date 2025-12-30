@@ -15,12 +15,7 @@ const QuestionSchema = new Schema(
 );
 
 type QuestionDocument = InferSchemaType<typeof QuestionSchema>;
-export type Question = Omit<
-  QuestionDocument,
-  "_id" | "createdAt" | "updatedAt"
-> & {
-  _id: string;
-};
+export type Question = Omit<QuestionDocument, "createdAt" | "updatedAt">;
 
 const QuestionModel: Model<QuestionDocument> =
   mongoose.models.Question ||

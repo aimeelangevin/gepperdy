@@ -6,15 +6,11 @@ import RoundModel from "@/models/Round";
 export async function GET() {
   try {
     await connectDB();
-    const rounds = await RoundModel.find({});
-    const roundsData = rounds.map((round) => ({
-      _id: round._id.toString(),
-      categoryIds: round.categoryIds,
-    }));
+    const rounds = await RoundModel.find({}).lean();
 
     return NextResponse.json({
       success: true,
-      data: roundsData,
+      data: rounds,
     });
   } catch (error) {
     return NextResponse.json(
@@ -42,10 +38,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: true,
-        data: {
-          _id: newRound._id.toString(),
-          categoryIds: newRound.categoryIds,
-        },
+        data: newRound.toObject(),
       },
       { status: 201 }
     );

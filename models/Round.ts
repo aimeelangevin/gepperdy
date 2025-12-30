@@ -10,9 +10,7 @@ const RoundSchema = new Schema(
 );
 
 type RoundDocument = InferSchemaType<typeof RoundSchema>;
-export type Round = Omit<RoundDocument, "_id" | "createdAt" | "updatedAt"> & {
-  _id: string;
-};
+export type Round = Omit<RoundDocument, "createdAt" | "updatedAt">;
 
 const RoundModel: Model<RoundDocument> =
   mongoose.models.Round || mongoose.model<RoundDocument>("Round", RoundSchema);

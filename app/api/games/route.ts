@@ -6,17 +6,11 @@ import GameModel from "@/models/Game";
 export async function GET() {
   try {
     await connectDB();
-    const games = await GameModel.find({});
-    const gamesData = games.map((game) => ({
-      _id: game._id.toString(),
-      name: game.name,
-      theme: game.theme,
-      roundIds: game.roundIds,
-    }));
+    const games = await GameModel.find({}).lean();
 
     return NextResponse.json({
       success: true,
-      data: gamesData,
+      data: games,
     });
   } catch (error) {
     return NextResponse.json(
@@ -52,12 +46,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: true,
-        data: {
-          _id: newGame._id.toString(),
-          name: newGame.name,
-          theme: newGame.theme,
-          roundIds: newGame.roundIds,
-        },
+        data: newGame.toObject(),
       },
       { status: 201 }
     );

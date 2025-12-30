@@ -6,17 +6,11 @@ import UserModel from "@/models/User";
 export async function GET() {
   try {
     await connectDB();
-    const users = await UserModel.find({});
-    const usersData = users.map((user) => ({
-      _id: user._id.toString(),
-      name: user.name,
-      email: user.email,
-      passwordHash: user.passwordHash,
-    }));
+    const users = await UserModel.find({}).lean();
 
     return NextResponse.json({
       success: true,
-      data: usersData,
+      data: users,
     });
   } catch (error) {
     return NextResponse.json(
@@ -52,12 +46,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: true,
-        data: {
-          _id: newUser._id.toString(),
-          name: newUser.name,
-          email: newUser.email,
-          passwordHash: newUser.passwordHash,
-        },
+        data: newUser.toObject(),
       },
       { status: 201 }
     );

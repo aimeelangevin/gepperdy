@@ -10,7 +10,7 @@ export async function GET(
   try {
     await connectDB();
     const { id } = await params;
-    const gameState = await GameStateModel.findById(id);
+    const gameState = await GameStateModel.findById(id).lean();
 
     if (!gameState) {
       return NextResponse.json(
@@ -21,18 +21,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: gameState._id.toString(),
-        gameId: gameState.gameId,
-        teams: gameState.teams.map((team: any) => ({
-          _id: team._id.toString(),
-          name: team.name,
-          score: team.score,
-        })),
-        currentTeamIndex: gameState.currentTeamIndex,
-        currentRoundIndex: gameState.currentRoundIndex,
-        completedQuestionIds: gameState.completedQuestionIds,
-      },
+      data: gameState,
     });
   } catch (error) {
     return NextResponse.json(
@@ -73,7 +62,7 @@ export async function PUT(
         ...(completedQuestionIds !== undefined && { completedQuestionIds }),
       },
       { new: true, runValidators: true }
-    );
+    ).lean();
 
     if (!gameState) {
       return NextResponse.json(
@@ -84,18 +73,7 @@ export async function PUT(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: gameState._id.toString(),
-        gameId: gameState.gameId,
-        teams: gameState.teams.map((team: any) => ({
-          _id: team._id.toString(),
-          name: team.name,
-          score: team.score,
-        })),
-        currentTeamIndex: gameState.currentTeamIndex,
-        currentRoundIndex: gameState.currentRoundIndex,
-        completedQuestionIds: gameState.completedQuestionIds,
-      },
+      data: gameState,
     });
   } catch (error) {
     return NextResponse.json(
@@ -119,7 +97,7 @@ export async function DELETE(
   try {
     await connectDB();
     const { id } = await params;
-    const deletedGameState = await GameStateModel.findByIdAndDelete(id);
+    const deletedGameState = await GameStateModel.findByIdAndDelete(id).lean();
 
     if (!deletedGameState) {
       return NextResponse.json(
@@ -130,18 +108,7 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: deletedGameState._id.toString(),
-        gameId: deletedGameState.gameId,
-        teams: deletedGameState.teams.map((team: any) => ({
-          _id: team._id.toString(),
-          name: team.name,
-          score: team.score,
-        })),
-        currentTeamIndex: deletedGameState.currentTeamIndex,
-        currentRoundIndex: deletedGameState.currentRoundIndex,
-        completedQuestionIds: deletedGameState.completedQuestionIds,
-      },
+      data: deletedGameState,
       message: "Game state deleted successfully",
     });
   } catch (error) {

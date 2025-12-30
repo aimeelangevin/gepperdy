@@ -6,20 +6,11 @@ import QuestionModel from "@/models/Question";
 export async function GET() {
   try {
     await connectDB();
-    const questions = await QuestionModel.find({});
-    const questionsData = questions.map((question) => ({
-      _id: question._id.toString(),
-      text: question.text,
-      imageUrl: question.imageUrl,
-      audioUrl: question.audioUrl,
-      answer: question.answer,
-      isDailyDouble: question.isDailyDouble,
-      points: question.points,
-    }));
+    const questions = await QuestionModel.find({}).lean();
 
     return NextResponse.json({
       success: true,
-      data: questionsData,
+      data: questions,
     });
   } catch (error) {
     return NextResponse.json(
@@ -59,15 +50,7 @@ export async function POST(request: Request) {
     return NextResponse.json(
       {
         success: true,
-        data: {
-          _id: newQuestion._id.toString(),
-          text: newQuestion.text,
-          imageUrl: newQuestion.imageUrl,
-          audioUrl: newQuestion.audioUrl,
-          answer: newQuestion.answer,
-          isDailyDouble: newQuestion.isDailyDouble,
-          points: newQuestion.points,
-        },
+        data: newQuestion.toObject(),
       },
       { status: 201 }
     );

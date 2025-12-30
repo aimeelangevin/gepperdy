@@ -10,7 +10,7 @@ export async function GET(
   try {
     await connectDB();
     const { id } = await params;
-    const user = await UserModel.findById(id);
+    const user = await UserModel.findById(id).lean();
 
     if (!user) {
       return NextResponse.json(
@@ -21,12 +21,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: user._id.toString(),
-        name: user.name,
-        email: user.email,
-        passwordHash: user.passwordHash,
-      },
+      data: user,
     });
   } catch (error) {
     return NextResponse.json(
@@ -58,7 +53,7 @@ export async function PUT(
         ...(passwordHash !== undefined && { passwordHash }),
       },
       { new: true, runValidators: true }
-    );
+    ).lean();
 
     if (!user) {
       return NextResponse.json(
@@ -69,12 +64,7 @@ export async function PUT(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: user._id.toString(),
-        name: user.name,
-        email: user.email,
-        passwordHash: user.passwordHash,
-      },
+      data: user,
     });
   } catch (error) {
     if (
@@ -106,7 +96,7 @@ export async function DELETE(
   try {
     await connectDB();
     const { id } = await params;
-    const deletedUser = await UserModel.findByIdAndDelete(id);
+    const deletedUser = await UserModel.findByIdAndDelete(id).lean();
 
     if (!deletedUser) {
       return NextResponse.json(
@@ -117,12 +107,7 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: deletedUser._id.toString(),
-        name: deletedUser.name,
-        email: deletedUser.email,
-        passwordHash: deletedUser.passwordHash,
-      },
+      data: deletedUser,
       message: "User deleted successfully",
     });
   } catch (error) {

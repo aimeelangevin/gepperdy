@@ -11,12 +11,7 @@ const CategorySchema = new Schema(
 );
 
 type CategoryDocument = InferSchemaType<typeof CategorySchema>;
-export type Category = Omit<
-  CategoryDocument,
-  "_id" | "createdAt" | "updatedAt"
-> & {
-  _id: string;
-};
+export type Category = Omit<CategoryDocument, "createdAt" | "updatedAt">;
 
 const CategoryModel: Model<CategoryDocument> =
   mongoose.models.Category ||

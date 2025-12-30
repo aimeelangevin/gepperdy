@@ -10,7 +10,7 @@ export async function GET(
   try {
     await connectDB();
     const { id } = await params;
-    const question = await QuestionModel.findById(id);
+    const question = await QuestionModel.findById(id).lean();
 
     if (!question) {
       return NextResponse.json(
@@ -21,15 +21,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: question._id.toString(),
-        text: question.text,
-        imageUrl: question.imageUrl,
-        audioUrl: question.audioUrl,
-        answer: question.answer,
-        isDailyDouble: question.isDailyDouble,
-        points: question.points,
-      },
+      data: question,
     });
   } catch (error) {
     return NextResponse.json(
@@ -65,7 +57,7 @@ export async function PUT(
         ...(points !== undefined && { points }),
       },
       { new: true, runValidators: true }
-    );
+    ).lean();
 
     if (!question) {
       return NextResponse.json(
@@ -76,15 +68,7 @@ export async function PUT(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: question._id.toString(),
-        text: question.text,
-        imageUrl: question.imageUrl,
-        audioUrl: question.audioUrl,
-        answer: question.answer,
-        isDailyDouble: question.isDailyDouble,
-        points: question.points,
-      },
+      data: question,
     });
   } catch (error) {
     return NextResponse.json(
@@ -106,7 +90,7 @@ export async function DELETE(
   try {
     await connectDB();
     const { id } = await params;
-    const deletedQuestion = await QuestionModel.findByIdAndDelete(id);
+    const deletedQuestion = await QuestionModel.findByIdAndDelete(id).lean();
 
     if (!deletedQuestion) {
       return NextResponse.json(
@@ -117,15 +101,7 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: deletedQuestion._id.toString(),
-        text: deletedQuestion.text,
-        imageUrl: deletedQuestion.imageUrl,
-        audioUrl: deletedQuestion.audioUrl,
-        answer: deletedQuestion.answer,
-        isDailyDouble: deletedQuestion.isDailyDouble,
-        points: deletedQuestion.points,
-      },
+      data: deletedQuestion,
       message: "Question deleted successfully",
     });
   } catch (error) {

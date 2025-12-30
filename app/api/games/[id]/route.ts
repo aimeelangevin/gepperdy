@@ -10,7 +10,7 @@ export async function GET(
   try {
     await connectDB();
     const { id } = await params;
-    const game = await GameModel.findById(id);
+    const game = await GameModel.findById(id).lean();
 
     if (!game) {
       return NextResponse.json(
@@ -21,12 +21,7 @@ export async function GET(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: game._id.toString(),
-        name: game.name,
-        theme: game.theme,
-        roundIds: game.roundIds,
-      },
+      data: game,
     });
   } catch (error) {
     return NextResponse.json(
@@ -58,7 +53,7 @@ export async function PUT(
         ...(roundIds !== undefined && { roundIds }),
       },
       { new: true, runValidators: true }
-    );
+    ).lean();
 
     if (!game) {
       return NextResponse.json(
@@ -69,12 +64,7 @@ export async function PUT(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: game._id.toString(),
-        name: game.name,
-        theme: game.theme,
-        roundIds: game.roundIds,
-      },
+      data: game,
     });
   } catch (error) {
     return NextResponse.json(
@@ -95,7 +85,7 @@ export async function DELETE(
   try {
     await connectDB();
     const { id } = await params;
-    const deletedGame = await GameModel.findByIdAndDelete(id);
+    const deletedGame = await GameModel.findByIdAndDelete(id).lean();
 
     if (!deletedGame) {
       return NextResponse.json(
@@ -106,12 +96,7 @@ export async function DELETE(
 
     return NextResponse.json({
       success: true,
-      data: {
-        _id: deletedGame._id.toString(),
-        name: deletedGame.name,
-        theme: deletedGame.theme,
-        roundIds: deletedGame.roundIds,
-      },
+      data: deletedGame,
       message: "Game deleted successfully",
     });
   } catch (error) {
