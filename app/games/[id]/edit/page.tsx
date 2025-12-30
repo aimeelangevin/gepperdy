@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { Category } from '@/models/Category';
 import { Question } from '@/models/Question';
 import { Round } from '@/models/Round';
-import { gameApi } from '@/lib/api';
+import { gameApi, roundApi } from '@/lib/api';
+import { Game } from '@/models/Game';
 
 // Dummy initial data for a 5x5 grid
 const createEmptyRound = (isDouble: boolean): Round & { categories: (Category & { questions: Question[] })[] } => {
@@ -43,7 +44,9 @@ type ExtendedRound = Round & { categories: (Category & { questions: Question[] }
 
 export default function GameEditPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const [gameName, setGameName] = useState<string>('Loading...');
+  const [game, setGame] = useState<Game | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [rounds, setRounds] = useState<ExtendedRound[]>([
     createEmptyRound(false),
     createEmptyRound(true),
@@ -53,13 +56,37 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
   const [editingCategory, setEditingCategory] = useState<number | null>(null);
 
   useEffect(() => {
-    const fetchGame = async () => {
-      const response = await gameApi.getById(id);
-      if (response.success && response.data) {
-        setGameName(response.data.name);
+    const fetchGameData = async () => {
+      setLoading(true);
+      setError(null);
+      
+      try {
+        const response = await gameApi.getById(id);
+        if (response.success && response.data) {
+          setGame(response.data);
+          
+          // If game has rounds, fetch them
+          if (response.data.roundIds && response.data.roundIds.length > 0) {
+            // TODO: Fetch actual rounds, categories, and questions
+            // For now, keep empty rounds
+          } else {
+            // No rounds yet, use empty rounds
+            setRounds([
+              createEmptyRound(false),
+              createEmptyRound(true),
+            ]);
+          }
+        } else {
+          setError(response.error || 'Failed to load game');
+        }
+      } catch (err) {
+        setError('An unexpected error occurred');
+      } finally {
+        setLoading(false);
       }
     };
-    fetchGame();
+    
+    fetchGameData();
   }, [id]);
 
   const currentRound = rounds[currentRoundIndex];
@@ -88,6 +115,39 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
     setEditingCell(null);
   };
 
+  // Loading state
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-jeopardy-gold mx-auto mb-4"></div>
+          <p className="text-jeopardy-gold text-xl font-bold font-jeopardy">Loading game...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Error state
+  if (error || !game) {
+    return (
+      <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold p-8 max-w-md text-center">
+          <div className="text-6xl mb-4">⚠️</div>
+          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-4 font-jeopardy">
+            Error Loading Game
+          </h1>
+          <p className="text-slate-600 dark:text-slate-400 mb-6">{error || 'Game not found'}</p>
+          <Link
+            href="/games"
+            className="inline-block bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-3 px-8 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold"
+          >
+            ← Back to Games
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark">
       {/* Header */}
@@ -96,13 +156,13 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-4xl font-bold text-jeopardy-gold mb-1 tracking-wide font-jeopardy" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
-                {gameName}
+                {game.name}
               </h1>
             </div>
             <div className="flex gap-3">
               <Link
                 href="/games"
-                className="bg-slate-300 hover:bg-slate-400 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-bold py-2 px-6 rounded-lg transition-colors uppercase tracking-wide"
+                className="flex items-center bg-slate-300 hover:bg-slate-400 dark:bg-slate-700 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-bold py-2 px-6 rounded-lg transition-colors uppercase tracking-wide"
               >
                 Cancel
               </Link>
@@ -200,11 +260,6 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
                             ✓ Added
                           </div>
                         )}
-                        {question.isDailyDouble && (
-                          <div className="mt-1 text-jeopardy-gold text-xs font-bold">
-                            DAILY DOUBLE
-                          </div>
-                        )}
                       </td>
                     );
                   })}
@@ -244,10 +299,10 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
             </div>
 
             <div className="p-6 space-y-6">
-              {/* Question */}
+              {/* Question Text (Optional) */}
               <div>
                 <label className="block text-lg font-bold text-slate-900 dark:text-white mb-2 uppercase tracking-wide font-jeopardy">
-                  Question
+                  Question Text <span className="text-sm normal-case text-slate-500">(optional)</span>
                 </label>
                 <textarea
                   value={currentRound.categories[editingCell.catIndex].questions[editingCell.qIndex].text || ''}
@@ -255,8 +310,94 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
                     updateQuestion(editingCell.catIndex, editingCell.qIndex, { text: e.target.value })
                   }
                   className="w-full px-4 py-3 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-jeopardy-magenta dark:focus:border-jeopardy-gold focus:outline-none transition-colors text-lg min-h-24"
-                  placeholder="Enter the question..."
+                  placeholder="Enter the question text (optional)..."
                 />
+              </div>
+
+              {/* Image Upload (Optional) */}
+              <div>
+                <label className="block text-lg font-bold text-slate-900 dark:text-white mb-2 uppercase tracking-wide font-jeopardy">
+                  Image <span className="text-sm normal-case text-slate-500">(optional)</span>
+                </label>
+                <div className="space-y-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        // Create a preview URL (in production, upload to server)
+                        const imageUrl = URL.createObjectURL(file);
+                        updateQuestion(editingCell.catIndex, editingCell.qIndex, { imageUrl });
+                      }
+                    }}
+                    className="w-full px-4 py-3 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-jeopardy-blue file:text-jeopardy-gold hover:file:bg-jeopardy-blue-light cursor-pointer"
+                  />
+                  {(() => {
+                    const imageUrl = currentRound.categories[editingCell.catIndex].questions[editingCell.qIndex].imageUrl;
+                    return imageUrl ? (
+                      <div className="mt-2">
+                        <img
+                          src={imageUrl}
+                          alt="Question preview"
+                          className="max-w-full h-auto rounded-lg border-2 border-jeopardy-gold/30"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateQuestion(editingCell.catIndex, editingCell.qIndex, { imageUrl: undefined })
+                          }
+                          className="mt-2 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                        >
+                          Remove image
+                        </button>
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
+              </div>
+
+              {/* Audio Upload (Optional) */}
+              <div>
+                <label className="block text-lg font-bold text-slate-900 dark:text-white mb-2 uppercase tracking-wide font-jeopardy">
+                  Audio <span className="text-sm normal-case text-slate-500">(optional)</span>
+                </label>
+                <div className="space-y-3">
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        // Create a preview URL (in production, upload to server)
+                        const audioUrl = URL.createObjectURL(file);
+                        updateQuestion(editingCell.catIndex, editingCell.qIndex, { audioUrl });
+                      }
+                    }}
+                    className="w-full px-4 py-3 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-jeopardy-blue file:text-jeopardy-gold hover:file:bg-jeopardy-blue-light cursor-pointer"
+                  />
+                  {(() => {
+                    const audioUrl = currentRound.categories[editingCell.catIndex].questions[editingCell.qIndex].audioUrl;
+                    return audioUrl ? (
+                      <div className="mt-2">
+                        <audio
+                          controls
+                          src={audioUrl}
+                          className="w-full"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateQuestion(editingCell.catIndex, editingCell.qIndex, { audioUrl: undefined })
+                          }
+                          className="mt-2 text-sm text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+                        >
+                          Remove audio
+                        </button>
+                      </div>
+                    ) : null;
+                  })()}
+                </div>
               </div>
 
               {/* Answer */}
@@ -272,24 +413,8 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
                   }
                   className="w-full px-4 py-3 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-jeopardy-magenta dark:focus:border-jeopardy-gold focus:outline-none transition-colors text-lg"
                   placeholder="What is...?"
+                  required
                 />
-              </div>
-
-              {/* Daily Double Checkbox */}
-              <div>
-                <label className="flex items-center gap-3 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={currentRound.categories[editingCell.catIndex].questions[editingCell.qIndex].isDailyDouble}
-                    onChange={(e) =>
-                      updateQuestion(editingCell.catIndex, editingCell.qIndex, { isDailyDouble: e.target.checked })
-                    }
-                    className="w-5 h-5 text-jeopardy-magenta border-slate-300 rounded focus:ring-jeopardy-gold"
-                  />
-                  <span className="text-lg font-bold text-slate-900 dark:text-white uppercase tracking-wide font-jeopardy">
-                    Daily Double
-                  </span>
-                </label>
               </div>
 
               {/* Action Buttons */}
