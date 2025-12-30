@@ -47,6 +47,19 @@ export async function POST(request: Request) {
       );
     }
 
+    // Validate that all teams have IDs
+    if (teams && teams.length > 0) {
+      const teamsWithoutIds = teams.filter(
+        (team) => !team.id || team.id.trim() === ""
+      );
+      if (teamsWithoutIds.length > 0) {
+        return NextResponse.json(
+          { success: false, error: "All teams must have an id field" },
+          { status: 400 }
+        );
+      }
+    }
+
     const newGameState = await GameStateModel.create({
       gameId,
       teams: teams || [],
