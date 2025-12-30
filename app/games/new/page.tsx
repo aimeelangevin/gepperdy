@@ -47,10 +47,10 @@ export default function NewGamePage() {
 
     try {
       // Create the game in the backend (with placeholder structure)
-      const response = await gameApi.create({
+      const response = await gameApi.create("hardcoded-user-id", {
         name: gameName.trim(),
         theme,
-        rounds, // 'single' or 'double' - backend will create placeholder rounds/categories/questions
+        type: rounds, // 'single' or 'double' - backend will create placeholder rounds/categories/questions
       });
 
       if (response.success && response.data) {

@@ -39,7 +39,7 @@ export async function POST(request: Request) {
   try {
     await connectDB();
     const body = await request.json();
-    const { name, theme, type } = body;
+    const { name, theme, type, userId } = body;
 
     if (!name || !theme) {
       return NextResponse.json(
@@ -92,6 +92,7 @@ export async function POST(request: Request) {
       name,
       theme,
       roundIds,
+      userId,
     });
 
     return NextResponse.json(

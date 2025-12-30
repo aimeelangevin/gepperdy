@@ -25,7 +25,7 @@ export default function GamesPage() {
       setError(null);
       
       try {
-        const response = await gameApi.getAll();
+        const response = await gameApi.getAllGamesForUser("hardcoded-user-id");
         if (response.success && response.data) {
           setGames(response.data);
         } else {
@@ -83,8 +83,7 @@ export default function GamesPage() {
           </div>
         ) : games.length === 0 ? (
           <div className="text-center py-20">
-            <div className="text-6xl mb-4">🎮</div>
-            <p className="text-jeopardy-royal/70 text-xl mb-6">No games yet</p>
+            <p className="text-jeopardy-blue/70 text-xl mb-6">No games yet</p>
             <Link
               href="/games/new"
               className="inline-block bg-jeopardy-gold hover:bg-jeopardy-gold-light text-jeopardy-blue font-bold py-3 px-8 rounded-lg transition-colors shadow-lg uppercase tracking-wide"
@@ -96,10 +95,10 @@ export default function GamesPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {games.map((game) => (
               <div
-                key={game._id}
+                key={game._id.toString()}
                 className="bg-white dark:bg-slate-900 rounded-xl overflow-hidden shadow-xl border-4 border-jeopardy-gold hover:scale-105 transition-transform cursor-pointer"
               >
-                <Link href={`/games/${game._id}`}>
+                <Link href={`/games/${game._id.toString()}`}>
                   <div className="p-6">
                     {/* Theme Icon */}
                     <div className="text-5xl mb-4 text-center">
