@@ -8,6 +8,7 @@ import { Round } from '@/models/Round';
 import { gameApi, roundApi, categoryApi, questionApi } from '@/lib/api';
 import { Game } from '@/models/Game';
 import type { GetUploadUrlResponse } from '@/types/api';
+import { Theme } from '@/types/theme';
 
 type ExtendedRound = Round & { categories: (Category & { questions: Question[] })[] };
 
@@ -144,6 +145,80 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
 
   const currentRound = rounds[currentRoundIndex];
   const isDoubleJeopardy = currentRoundIndex === 1;
+
+  // Helper function to get theme-specific cell colors
+  const getCellColors = (catIndex: number, qIndex: number) => {
+    if (game?.theme === Theme.Christmas) {
+      // Alternating red and green pattern
+      const isRed = (catIndex + qIndex) % 2 === 0;
+      return {
+        bg: isRed ? 'bg-red-600' : 'bg-green-600',
+        hover: isRed ? 'hover:bg-red-700' : 'hover:bg-green-700',
+        border: isRed ? 'border-red-800' : 'border-green-800',
+        text: 'text-white',
+      };
+    }
+    if (game?.theme === Theme.Fall) {
+      // Alternating brown and orange pattern
+      const isBrown = (catIndex + qIndex) % 2 === 0;
+      return {
+        bg: isBrown ? 'bg-amber-800' : 'bg-orange-500',
+        hover: isBrown ? 'hover:bg-amber-900' : 'hover:bg-orange-600',
+        border: isBrown ? 'border-amber-900' : 'border-orange-700',
+        text: 'text-white',
+      };
+    }
+    if (game?.theme === Theme.Birthday) {
+      // Light blue squares
+      return {
+        bg: 'bg-sky-300',
+        hover: 'hover:bg-sky-400',
+        border: 'border-sky-500',
+        text: 'text-jeopardy-royal',
+      };
+    }
+    // Classic theme (default)
+    return {
+      bg: 'bg-jeopardy-blue',
+      hover: 'hover:bg-jeopardy-blue-light',
+      border: 'border-jeopardy-royal',
+      text: 'text-jeopardy-gold',
+    };
+  };
+
+  // Helper function to get theme-specific header colors
+  const getHeaderColors = () => {
+    if (game?.theme === Theme.Christmas) {
+      return {
+        bg: 'bg-red-700',
+        hover: 'hover:bg-red-800',
+        border: 'border-green-800',
+        text: 'text-white',
+      };
+    }
+    if (game?.theme === Theme.Fall) {
+      return {
+        bg: 'bg-amber-800',
+        hover: 'hover:bg-amber-900',
+        border: 'border-orange-700',
+        text: 'text-white',
+      };
+    }
+    if (game?.theme === Theme.Birthday) {
+      return {
+        bg: 'bg-sky-400',
+        hover: 'hover:bg-sky-500',
+        border: 'border-sky-600',
+        text: 'text-jeopardy-royal',
+      };
+    }
+    return {
+      bg: 'bg-jeopardy-blue',
+      hover: 'hover:bg-jeopardy-blue-light',
+      border: 'border-jeopardy-royal',
+      text: 'text-jeopardy-gold',
+    };
+  };
   
   // If no rounds are loaded yet, show loading
   if (!currentRound) {
@@ -328,17 +403,75 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
       )}
 
       {/* Game Board */}
-      <div className="container mx-auto px-4 py-8">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold p-6 overflow-x-auto">
+      <div className="container mx-auto px-4 py-8 relative">
+        {/* Fall Leaves Around Board */}
+        {game?.theme === Theme.Fall && (
+          <>
+            {/* Top Left Leaf */}
+            <div className="absolute -top-12 -left-8 z-10 w-24 h-24 opacity-80">
+              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+            </div>
+            {/* Top Right Leaf */}
+            <div className="absolute -top-12 -right-8 z-10 w-24 h-24 opacity-80" style={{ transform: 'rotate(45deg)' }}>
+              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+            </div>
+            {/* Bottom Left Leaf */}
+            <div className="absolute -bottom-12 -left-8 z-10 w-24 h-24 opacity-80" style={{ transform: 'rotate(180deg)' }}>
+              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+            </div>
+            {/* Bottom Right Leaf */}
+            <div className="absolute -bottom-12 -right-8 z-10 w-24 h-24 opacity-80" style={{ transform: 'rotate(-45deg)' }}>
+              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+            </div>
+            {/* Left Side Leaves */}
+            <div className="absolute left-0 top-1/2 -translate-y-1/2 -left-8 z-10 w-20 h-20 opacity-70" style={{ transform: 'translateY(-50%) rotate(-90deg)' }}>
+              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+            </div>
+            <div className="absolute left-0 top-1/4 -left-6 z-10 w-16 h-16 opacity-60" style={{ transform: 'rotate(12deg)' }}>
+              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+            </div>
+            <div className="absolute left-0 top-3/4 -left-6 z-10 w-16 h-16 opacity-60" style={{ transform: 'rotate(-12deg)' }}>
+              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+            </div>
+            {/* Right Side Leaves */}
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 -right-8 z-10 w-20 h-20 opacity-70" style={{ transform: 'translateY(-50%) rotate(90deg)' }}>
+              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+            </div>
+            <div className="absolute right-0 top-1/4 -right-6 z-10 w-16 h-16 opacity-60" style={{ transform: 'rotate(-12deg)' }}>
+              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+            </div>
+            <div className="absolute right-0 top-3/4 -right-6 z-10 w-16 h-16 opacity-60" style={{ transform: 'rotate(12deg)' }}>
+              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+            </div>
+            {/* Top Center Leaves */}
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 -top-10 z-10 w-20 h-20 opacity-75">
+              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+            </div>
+            {/* Bottom Center Leaves */}
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 -bottom-10 z-10 w-20 h-20 opacity-75" style={{ transform: 'rotate(180deg)' }}>
+              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+            </div>
+          </>
+        )}
+        
+        <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 ${
+          game?.theme === Theme.Christmas ? 'border-red-600' : 
+          game?.theme === Theme.Fall ? 'border-amber-800' : 
+          game?.theme === Theme.Birthday ? 'border-sky-500' :
+          'border-jeopardy-gold'
+        } p-6 overflow-x-auto relative`}>
+          
           <table className="w-full border-collapse table-fixed">
             <thead>
               <tr>
-                {currentRound.categories.map((category, catIndex) => (
-                  <th
-                    key={category._id.toString()}
-                    className="bg-jeopardy-blue text-jeopardy-gold p-4 border-4 border-jeopardy-royal font-jeopardy cursor-pointer hover:bg-jeopardy-blue-light transition-colors w-[20%]"
-                    onClick={() => setEditingCategory(catIndex)}
-                  >
+                {currentRound.categories.map((category, catIndex) => {
+                  const headerColors = getHeaderColors();
+                  return (
+                    <th
+                      key={category._id.toString()}
+                      className={`${headerColors.bg} ${headerColors.text} p-4 border-4 ${headerColors.border} font-jeopardy cursor-pointer ${headerColors.hover} transition-colors w-[20%]`}
+                      onClick={() => setEditingCategory(catIndex)}
+                    >
                     {editingCategory === catIndex ? (
                       <input
                         type="text"
@@ -356,8 +489,9 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
                         {category.name}
                       </div>
                     )}
-                  </th>
-                ))}
+                    </th>
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
@@ -366,20 +500,21 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
                   {currentRound.categories.map((category, catIndex) => {
                     const question = category.questions[qIndex];
                     const hasContent = question.text || question.answer;
+                    const cellColors = getCellColors(catIndex, qIndex);
                     
                     return (
                       <td
                         key={`${category._id}-${qIndex}`}
-                        className={`bg-jeopardy-blue hover:bg-jeopardy-blue-light border-4 border-jeopardy-royal p-8 cursor-pointer transition-colors text-center ${
+                        className={`${cellColors.bg} ${cellColors.hover} border-4 ${cellColors.border} p-8 cursor-pointer transition-colors text-center ${
                           hasContent ? 'ring-2 ring-jeopardy-magenta ring-inset' : ''
                         }`}
                         onClick={() => openCellEditor(catIndex, qIndex)}
                       >
-                        <div className="text-jeopardy-gold text-4xl font-bold font-jeopardy">
+                        <div className={`${cellColors.text} text-4xl font-bold font-jeopardy`}>
                           ${question.points}
                         </div>
                         {hasContent && (
-                          <div className="mt-2 text-white text-xs">
+                          <div className={`mt-2 ${cellColors.text} text-xs`}>
                             ✓ Added
                           </div>
                         )}
@@ -580,6 +715,99 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
             </div>
           </div>
         </div>
+      )}
+
+      {/* Big Pumpkin for Fall Theme */}
+      {game?.theme === Theme.Fall && (
+        <div className="fixed bottom-8 right-4 z-10 pointer-events-none">
+          <img src="/pumpkin.png" alt="pumpkin" className="w-32 h-32 md:w-48 md:h-48 object-contain drop-shadow-lg" />
+        </div>
+      )}
+
+      {/* Wreath for Christmas Theme */}
+      {game?.theme === Theme.Christmas && (
+        <div className="fixed top-32 right-12 z-10 pointer-events-none">
+          <img src="/wreath.png" alt="wreath" className="w-32 h-32 md:w-40 md:h-40 object-contain drop-shadow-lg" />
+        </div>
+      )}
+
+      {/* Snowfall for Christmas Theme */}
+      {game?.theme === Theme.Christmas && (
+        <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+          {Array.from({ length: 300 }).map((_, i) => {
+            // Generate random values for each flake
+            const randomX = Math.random() * 100; // Random horizontal position
+            const randomY = Math.random() * 100; // Random vertical starting position (distributed throughout screen)
+            const randomDuration = 30 + Math.random() * 25; // Very slow float: 30-55 seconds
+            // Calculate delay so flake appears to start from its random Y position
+            const randomDelay = -(randomY / 100) * randomDuration; // Negative delay to start at random position
+            const randomOpacity = 0.4 + Math.random() * 0.4; // Soft opacity
+            // Random horizontal drift values that change throughout the fall
+            const drift1 = (Math.random() - 0.5) * 80;
+            const drift2 = (Math.random() - 0.5) * 80;
+            const drift3 = (Math.random() - 0.5) * 80;
+            
+            return (
+              <div
+                key={i}
+                className="absolute w-1 h-1 bg-white rounded-full"
+                style={{
+                  left: `${randomX}%`,
+                  top: `${randomY}%`,
+                  opacity: randomOpacity,
+                  animation: `snowfall ${randomDuration}s linear infinite`,
+                  animationDelay: `${randomDelay}s`,
+                  // Use CSS custom properties for random drift
+                  '--drift-1': `${drift1}px`,
+                  '--drift-2': `${drift2}px`,
+                  '--drift-3': `${drift3}px`,
+                } as React.CSSProperties & { '--drift-1': string; '--drift-2': string; '--drift-3': string }}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Birthday Theme Decorations */}
+      {game?.theme === Theme.Birthday && (
+        <>
+          {/* Banner in top left */}
+          <div className="fixed top-24 left-2 z-10 pointer-events-none" style={{ transform: 'rotate(-30deg)' }}>
+            <img src="/banner.png" alt="banner" className="w-56 h-28 md:w-64 md:h-32 object-contain drop-shadow-lg" />
+          </div>
+
+          {/* Banner in top right (mirrored) */}
+          <div className="fixed top-24 right-2 z-10 pointer-events-none" style={{ transform: 'rotate(30deg) scaleX(-1)' }}>
+            <img src="/banner.png" alt="banner" className="w-56 h-28 md:w-64 md:h-32 object-contain drop-shadow-lg" />
+          </div>
+
+          {/* Present piles at bottom */}
+          <div className="fixed bottom-0 left-0 right-0 z-10 pointer-events-none">
+            {/* Left side present pile */}
+            <div className="absolute bottom-0 left-8 flex items-end gap-2">
+              <img src="/present1.png" alt="present" className="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-md" />
+              <img src="/present2.png" alt="present" className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-md" />
+              <img src="/present1.png" alt="present" className="w-14 h-14 md:w-18 md:h-18 object-contain drop-shadow-md" />
+              <img src="/present2.png" alt="present" className="w-18 h-18 md:w-22 md:h-22 object-contain drop-shadow-md" />
+            </div>
+
+            {/* Center present pile */}
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 flex items-end gap-2">
+              <img src="/present2.png" alt="present" className="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-md" />
+              <img src="/present1.png" alt="present" className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-md" />
+              <img src="/present2.png" alt="present" className="w-18 h-18 md:w-22 md:h-22 object-contain drop-shadow-md" />
+              <img src="/present1.png" alt="present" className="w-14 h-14 md:w-18 md:h-18 object-contain drop-shadow-md" />
+            </div>
+
+            {/* Right side present pile */}
+            <div className="absolute bottom-0 right-8 flex items-end gap-2">
+              <img src="/present1.png" alt="present" className="w-18 h-18 md:w-22 md:h-22 object-contain drop-shadow-md" />
+              <img src="/present2.png" alt="present" className="w-14 h-14 md:w-18 md:h-18 object-contain drop-shadow-md" />
+              <img src="/present1.png" alt="present" className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-md" />
+              <img src="/present2.png" alt="present" className="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-md" />
+            </div>
+          </div>
+        </>
       )}
 
     </div>

@@ -276,16 +276,6 @@ export default function LoginPage() {
             )}
           </div>
         </div>
-
-        {/* Back to Home Link */}
-        <div className="mt-6 text-center">
-          <a
-            href="/"
-            className="text-sm text-jeopardy-blue hover:text-jeopardy-magenta font-bold uppercase tracking-wide"
-          >
-            ← Back to Home
-          </a>
-        </div>
       </div>
     </div>
   );

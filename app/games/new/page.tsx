@@ -51,7 +51,7 @@ export default function NewGamePage() {
         name: gameName.trim(),
         theme,
         type: rounds, // 'single' or 'double' - backend will create placeholder rounds/categories/questions
-        userId: "placeholder-user-id", // TODO: Get actual user ID from auth
+        userId: "hardcoded-user-id", // TODO: Get actual user ID from auth
       });
 
       if (response.success && response.data) {

@@ -33,6 +33,12 @@
   --color-jeopardy-silver-light: #E8E8E8;
   --color-jeopardy-silver-dark: #8C8C8C;
   
+  /* Christmas theme colors */
+  --color-christmas-red: #DC2626;
+  --color-christmas-green: #16A34A;
+  --color-christmas-red-light: #EF4444;
+  --color-christmas-green-light: #22C55E;
+  
   /* Custom primary colors */
   --color-primary-50: #eff6ff;
   --color-primary-100: #dbeafe;
@@ -79,6 +85,39 @@ body {
 @keyframes slideDown {
   0% { transform: translateY(-20px); opacity: 0; }
   100% { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes snowfall {
+  0% {
+    transform: translateY(-200vh) translateX(0);
+    opacity: 0;
+  }
+  2% {
+    opacity: 0.7;
+  }
+  10% {
+    transform: translateY(-180vh) translateX(calc(var(--drift-1, 0px) * 0.3));
+  }
+  25% {
+    transform: translateY(-150vh) translateX(calc(var(--drift-1, 0px) * 0.6));
+  }
+  50% {
+    transform: translateY(-100vh) translateX(var(--drift-2, 0px));
+  }
+  75% {
+    transform: translateY(-50vh) translateX(calc(var(--drift-3, 0px) * 0.6));
+  }
+  90% {
+    opacity: 0.7;
+    transform: translateY(-20vh) translateX(calc(var(--drift-3, 0px) * 0.3));
+  }
+  95% {
+    opacity: 0.5;
+  }
+  100% {
+    transform: translateY(100vh) translateX(0);
+    opacity: 0;
+  }
 }
 
 /* Custom utility classes */
