@@ -1,6 +1,6 @@
 'use client';
 
-import { use, useEffect, useState } from 'react';
+import { use, useEffect, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { gameApi, gameStateApi, roundApi, categoryApi, questionApi } from '@/lib/api';
 import type { Game } from '@/models/Game';
@@ -65,6 +65,8 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     question: any;
   } | null>(null);
   
+  // Audio ref for Daily Double sound
+  const dailyDoubleAudioRef = useRef<HTMLAudioElement>(null);
   // Round summary state
   const [showRoundSummary, setShowRoundSummary] = useState(false);
 
@@ -83,6 +85,15 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       setIsAnimating(false);
     }
   }, [selectedQuestion]);
+
+  // Play Daily Double sound when Daily Double is activated
+  useEffect(() => {
+    if (showDailyDouble && dailyDoubleAudioRef.current) {
+      dailyDoubleAudioRef.current.play().catch((error) => {
+        console.error('Error playing Daily Double sound:', error);
+      });
+    }
+  }, [showDailyDouble]);
 
   const loadGame = async () => {
     try {
@@ -160,6 +171,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
         setGameState(stateResponse.data);
         setSettingUpTeams(false);
       } else {
+        setGameState(null);
         setSettingUpTeams(true);
       }
     } catch (err) {
@@ -177,6 +189,8 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
         name: name.trim() || `Team ${index + 1}`,
         score: 0,
       }));
+
+      console.log('Creating game state with teams:', teams);
 
       const response = await gameStateApi.create({
         gameId: id,
@@ -586,30 +600,41 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     };
   };
 
+  // Audio element for Daily Double sound (hidden)
+  const dailyDoubleAudio = (
+    <audio ref={dailyDoubleAudioRef} src="/daily_double.mp3" preload="auto" />
+  );
+
   if (loading) {
     return (
-      <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-jeopardy-royal mx-auto mb-4"></div>
-          <p className="text-jeopardy-royal text-xl font-bold font-sans uppercase">LOADING GAME...</p>
+      <>
+        {dailyDoubleAudio}
+        <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-jeopardy-royal mx-auto mb-4"></div>
+            <p className="text-jeopardy-royal text-xl font-bold font-sans uppercase">LOADING GAME...</p>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
   if (error) {
     return (
-      <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center">
-        <div className="text-center">
-          <p className="text-jeopardy-magenta text-xl font-bold font-sans mb-4 uppercase">{error?.toUpperCase()}</p>
-          <Link
-            href="/games"
-            className="inline-block bg-jeopardy-blue hover:bg-jeopardy-blue-light text-jeopardy-gold font-bold py-3 px-8 rounded-lg transition-colors uppercase tracking-wide"
-          >
-            Back to Games
-          </Link>
+      <>
+        {dailyDoubleAudio}
+        <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-jeopardy-magenta text-xl font-bold font-sans mb-4 uppercase">{error?.toUpperCase()}</p>
+            <Link
+              href="/games"
+              className="inline-block bg-jeopardy-blue hover:bg-jeopardy-blue-light text-jeopardy-gold font-bold py-3 px-8 rounded-lg transition-colors uppercase tracking-wide"
+            >
+              Back to Games
+            </Link>
+          </div>
         </div>
-      </div>
+      </>
     );
   }
 
@@ -620,7 +645,9 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
   // Team setup screen
   if (settingUpTeams) {
     return (
-      <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark py-12 px-4">
+      <>
+        {dailyDoubleAudio}
+        <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark py-12 px-4">
         <div className="max-w-2xl mx-auto">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold p-8">
             <h1 className="text-4xl font-bold text-jeopardy-gold mb-2 tracking-wide font-sans text-center uppercase">
@@ -689,6 +716,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
           </div>
         </div>
       </div>
+      </>
     );
   }
 
@@ -1191,6 +1219,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
           </div>
         </div>
       )}
+      {dailyDoubleAudio}
     </div>
   );
 }

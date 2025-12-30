@@ -53,6 +53,17 @@ export async function PUT(
       completedQuestionIds,
     } = body;
 
+    // Validate that all teams have IDs if teams are being updated
+    if (teams !== undefined && teams.length > 0) {
+      const teamsWithoutIds = teams.filter((team) => !team.id || team.id.trim() === '');
+      if (teamsWithoutIds.length > 0) {
+        return NextResponse.json(
+          { success: false, error: "All teams must have an id field" },
+          { status: 400 }
+        );
+      }
+    }
+
     const gameState = await GameStateModel.findByIdAndUpdate(
       id,
       {
