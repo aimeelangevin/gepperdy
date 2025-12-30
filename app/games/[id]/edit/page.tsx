@@ -85,49 +85,73 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
       setError(null);
       
       try {
+        // Fetch game
         const response = await gameApi.getById(id);
         if (response.success && response.data) {
           setGame(response.data);
           
-          // Fetch all rounds, categories, and questions
+          // Fetch all rounds, categories, and questions in parallel
           if (response.data.roundIds && response.data.roundIds.length > 0) {
-            const extendedRounds: ExtendedRound[] = [];
+            // Fetch all rounds in parallel
+            const roundPromises = response.data.roundIds.map((roundId) =>
+              roundApi.getById(roundId.toString())
+            );
+            const roundResponses = await Promise.all(roundPromises);
+            const rounds = roundResponses
+              .filter((r) => r.success && r.data)
+              .map((r) => r.data!);
             
-            for (const roundId of response.data.roundIds) {
-              // Fetch round
-              const roundResponse = await roundApi.getById(roundId.toString());
-              if (!roundResponse.success || !roundResponse.data) continue;
-              
-              const round = roundResponse.data;
-              const categories: (Category & { questions: Question[] })[] = [];
-              
-              // Fetch categories for this round
-              for (const categoryId of round.categoryIds) {
-                const categoryResponse = await categoryApi.getById(categoryId.toString());
-                if (!categoryResponse.success || !categoryResponse.data) continue;
-                
-                const category = categoryResponse.data;
-                const questions: Question[] = [];
-                
-                // Fetch questions for this category
-                for (const questionId of category.questionIds) {
-                  const questionResponse = await questionApi.getById(questionId.toString());
-                  if (questionResponse.success && questionResponse.data) {
-                    questions.push(questionResponse.data);
-                  }
-                }
-                
-                categories.push({
+            // Collect all category IDs from all rounds
+            const allCategoryIds = rounds.flatMap((round) => round.categoryIds);
+            
+            // Fetch all categories in parallel
+            const categoryPromises = allCategoryIds.map((categoryId) =>
+              categoryApi.getById(categoryId.toString())
+            );
+            const categoryResponses = await Promise.all(categoryPromises);
+            const categories = categoryResponses
+              .filter((r) => r.success && r.data)
+              .map((r) => r.data!);
+            
+            // Create a map of category ID to category for quick lookup
+            const categoryMap = new Map(
+              categories.map((cat) => [cat._id.toString(), cat])
+            );
+            
+            // Collect all question IDs from all categories
+            const allQuestionIds = categories.flatMap((category) => category.questionIds);
+            
+            // Fetch all questions in parallel
+            const questionPromises = allQuestionIds.map((questionId) =>
+              questionApi.getById(questionId.toString())
+            );
+            const questionResponses = await Promise.all(questionPromises);
+            const questions = questionResponses
+              .filter((r) => r.success && r.data)
+              .map((r) => r.data!);
+            
+            // Create a map of question ID to question for quick lookup
+            const questionMap = new Map(
+              questions.map((q) => [q._id.toString(), q])
+            );
+            
+            // Build the extended rounds structure
+            const extendedRounds: ExtendedRound[] = rounds.map((round) => {
+              const roundCategories = round.categoryIds
+                .map((categoryId) => categoryMap.get(categoryId.toString()))
+                .filter((cat): cat is Category => cat !== undefined)
+                .map((category) => ({
                   ...category,
-                  questions,
-                });
-              }
+                  questions: category.questionIds
+                    .map((questionId) => questionMap.get(questionId.toString()))
+                    .filter((q): q is Question => q !== undefined),
+                }));
               
-              extendedRounds.push({
+              return {
                 ...round,
-                categories,
-              });
-            }
+                categories: roundCategories,
+              };
+            });
             
             setRounds(extendedRounds);
           }
