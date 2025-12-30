@@ -1,6 +1,7 @@
 'use client';
 
 import { use, useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Category } from '@/models/Category';
 import { Question } from '@/models/Question';
@@ -8,11 +9,14 @@ import { Round } from '@/models/Round';
 import { gameApi, roundApi, categoryApi, questionApi } from '@/lib/api';
 import { Game } from '@/models/Game';
 import type { GetUploadUrlResponse } from '@/types/api';
+import ProtectedRoute from '@/components/ProtectedRoute';
+import { clearUserId } from '@/lib/auth';
 
 type ExtendedRound = Round & { categories: (Category & { questions: Question[] })[] };
 
-export default function GameEditPage({ params }: { params: Promise<{ id: string }> }) {
+function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const router = useRouter();
   const [game, setGame] = useState<Game | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -24,6 +28,11 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
   const saveTimeoutRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingAudio, setUploadingAudio] = useState(false);
+
+  const handleLogout = () => {
+    clearUserId();
+    router.push('/login');
+  };
 
   // Helper function to upload file to S3
   const uploadFileToS3 = async (
@@ -294,6 +303,12 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
               >
                 Back to all games
               </Link>
+              <button
+                onClick={handleLogout}
+                className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-lg uppercase tracking-wide text-sm border-2 border-jeopardy-gold/50 hover:border-jeopardy-gold"
+              >
+                Logout
+              </button>
             </div>
           </div>
         </div>
@@ -585,6 +600,14 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
       )}
 
     </div>
+  );
+}
+
+export default function GameEditPage({ params }: { params: Promise<{ id: string }> }) {
+  return (
+    <ProtectedRoute>
+      <GameEditPageContent params={params} />
+    </ProtectedRoute>
   );
 }
 

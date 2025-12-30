@@ -7,6 +7,9 @@ import type { GameState } from "@/models/GameState";
 import type { Question } from "@/models/Question";
 import type { Round } from "@/models/Round";
 import type {
+  RegisterRequest,
+  LoginRequest,
+  AuthResponse,
   CreateUserRequest,
   UpdateUserRequest,
   CreateCategoryRequest,
@@ -31,6 +34,21 @@ export interface ApiResponse<T> {
   error?: string;
   message?: string;
 }
+
+// Auth API functions
+export const authApi = {
+  register: (data: RegisterRequest) =>
+    apiFetch<AuthResponse>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  login: (data: LoginRequest) =>
+    apiFetch<AuthResponse>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+};
 
 // Generic fetch wrapper with error handling
 async function apiFetch<T>(

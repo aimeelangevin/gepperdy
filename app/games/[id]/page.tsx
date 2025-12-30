@@ -2,8 +2,9 @@
 
 import { use, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import ProtectedRoute from '@/components/ProtectedRoute';
 
-export default function GameDetailPage({ params }: { params: Promise<{ id: string }> }) {
+function GameDetailPageContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
   
@@ -13,5 +14,13 @@ export default function GameDetailPage({ params }: { params: Promise<{ id: strin
   }, [id, router]);
   
   return null;
+}
+
+export default function GameDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  return (
+    <ProtectedRoute>
+      <GameDetailPageContent params={params} />
+    </ProtectedRoute>
+  );
 }
 
