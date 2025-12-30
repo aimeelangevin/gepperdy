@@ -109,7 +109,6 @@ export async function POST(request: Request) {
       name,
       theme,
       roundIds,
-      userId,
     });
 
     return NextResponse.json(

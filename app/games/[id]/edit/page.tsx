@@ -7,6 +7,7 @@ import { Question } from '@/models/Question';
 import { Round } from '@/models/Round';
 import { gameApi, roundApi, categoryApi, questionApi } from '@/lib/api';
 import { Game } from '@/models/Game';
+import type { GetUploadUrlResponse } from '@/types/api';
 
 type ExtendedRound = Round & { categories: (Category & { questions: Question[] })[] };
 
@@ -21,6 +22,51 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
   const [editingCategory, setEditingCategory] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const saveTimeoutRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingAudio, setUploadingAudio] = useState(false);
+
+  // Helper function to upload file to S3
+  const uploadFileToS3 = async (
+    file: File,
+    onSuccess: (url: string) => void,
+    onError: (error: string) => void,
+    setUploading: (loading: boolean) => void
+  ) => {
+    setUploading(true);
+    try {
+      // Get presigned URL
+      const uploadUrlResponse = await questionApi.getUploadUrl({
+        fileName: file.name,
+        fileType: file.type,
+      });
+
+      if (!uploadUrlResponse.success || !uploadUrlResponse.data) {
+        throw new Error(uploadUrlResponse.error || 'Failed to get upload URL');
+      }
+
+      const { presignedUrl, objectUrl } = uploadUrlResponse.data;
+
+      // Upload file to S3 using presigned URL
+      const uploadResponse = await fetch(presignedUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type,
+        },
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error('Failed to upload file to S3');
+      }
+
+      // Save the object URL to the question
+      onSuccess(objectUrl);
+    } catch (error) {
+      onError(error instanceof Error ? error.message : 'Failed to upload file');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   useEffect(() => {
     const fetchGameData = async () => {
@@ -400,16 +446,29 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
                   <input
                     type="file"
                     accept="image/*"
+                    disabled={uploadingImage}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        // Create a preview URL (in production, upload to server)
-                        const imageUrl = URL.createObjectURL(file);
-                        updateQuestion(editingCell.catIndex, editingCell.qIndex, { imageUrl });
+                        uploadFileToS3(
+                          file,
+                          (imageUrl) => {
+                            updateQuestion(editingCell.catIndex, editingCell.qIndex, { imageUrl });
+                          },
+                          (error) => {
+                            alert(`Failed to upload image: ${error}`);
+                          },
+                          setUploadingImage
+                        );
                       }
                     }}
-                    className="w-full px-4 py-3 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-jeopardy-blue file:text-jeopardy-gold hover:file:bg-jeopardy-blue-light cursor-pointer"
+                    className="w-full px-4 py-3 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-jeopardy-blue file:text-jeopardy-gold hover:file:bg-jeopardy-blue-light cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   />
+                  {uploadingImage && (
+                    <div className="text-sm text-jeopardy-blue dark:text-jeopardy-gold">
+                      Uploading image...
+                    </div>
+                  )}
                   {(() => {
                     const imageUrl = currentRound.categories[editingCell.catIndex].questions[editingCell.qIndex].imageUrl;
                     return imageUrl ? (
@@ -443,16 +502,29 @@ export default function GameEditPage({ params }: { params: Promise<{ id: string 
                   <input
                     type="file"
                     accept="audio/*"
+                    disabled={uploadingAudio}
                     onChange={(e) => {
                       const file = e.target.files?.[0];
                       if (file) {
-                        // Create a preview URL (in production, upload to server)
-                        const audioUrl = URL.createObjectURL(file);
-                        updateQuestion(editingCell.catIndex, editingCell.qIndex, { audioUrl });
+                        uploadFileToS3(
+                          file,
+                          (audioUrl) => {
+                            updateQuestion(editingCell.catIndex, editingCell.qIndex, { audioUrl });
+                          },
+                          (error) => {
+                            alert(`Failed to upload audio: ${error}`);
+                          },
+                          setUploadingAudio
+                        );
                       }
                     }}
-                    className="w-full px-4 py-3 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-jeopardy-blue file:text-jeopardy-gold hover:file:bg-jeopardy-blue-light cursor-pointer"
+                    className="w-full px-4 py-3 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-jeopardy-blue file:text-jeopardy-gold hover:file:bg-jeopardy-blue-light cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                   />
+                  {uploadingAudio && (
+                    <div className="text-sm text-jeopardy-blue dark:text-jeopardy-gold">
+                      Uploading audio...
+                    </div>
+                  )}
                   {(() => {
                     const audioUrl = currentRound.categories[editingCell.catIndex].questions[editingCell.qIndex].audioUrl;
                     return audioUrl ? (
