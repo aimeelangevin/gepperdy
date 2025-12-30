@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import CategoryModel from "@/models/Category";
+import type { UpdateCategoryRequest } from "@/types/api";
 
 // GET single category by ID
 export async function GET(
@@ -43,7 +44,7 @@ export async function PUT(
   try {
     await connectDB();
     const { id } = await params;
-    const body = await request.json();
+    const body: UpdateCategoryRequest = await request.json();
     const { name, questionIds } = body;
 
     const category = await CategoryModel.findByIdAndUpdate(

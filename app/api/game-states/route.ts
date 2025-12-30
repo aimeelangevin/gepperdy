@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import GameStateModel from "@/models/GameState";
+import type { CreateGameStateRequest } from "@/types/api";
 
 // GET all game states
 export async function GET() {
@@ -30,7 +31,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     await connectDB();
-    const body = await request.json();
+    const body: CreateGameStateRequest = await request.json();
     const {
       gameId,
       teams,

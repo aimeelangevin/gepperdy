@@ -4,6 +4,7 @@ import GameModel from "@/models/Game";
 import RoundModel from "@/models/Round";
 import CategoryModel from "@/models/Category";
 import QuestionModel from "@/models/Question";
+import type { CreateGameRequest } from "@/types/api";
 
 // GET all games
 export async function GET(request: Request) {
@@ -38,7 +39,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     await connectDB();
-    const body = await request.json();
+    const body: CreateGameRequest = await request.json();
     const { name, theme, type, userId } = body;
 
     if (!name || !theme) {
@@ -104,6 +105,7 @@ export async function POST(request: Request) {
 
     // Create the game
     const newGame = await GameModel.create({
+      userId,
       name,
       theme,
       roundIds,

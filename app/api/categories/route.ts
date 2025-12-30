@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import CategoryModel from "@/models/Category";
+import type { CreateCategoryRequest } from "@/types/api";
 
 // GET all categories
 export async function GET() {
@@ -28,7 +29,7 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     await connectDB();
-    const body = await request.json();
+    const body: CreateCategoryRequest = await request.json();
     const { name, questionIds } = body;
 
     if (!name) {

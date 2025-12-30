@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import GameModel from "@/models/Game";
+import type { UpdateGameRequest } from "@/types/api";
 
 // GET single game by ID
 export async function GET(
@@ -42,7 +43,7 @@ export async function PUT(
   try {
     await connectDB();
     const { id } = await params;
-    const body = await request.json();
+    const body: UpdateGameRequest = await request.json();
     const { name, theme, roundIds } = body;
 
     const game = await GameModel.findByIdAndUpdate(

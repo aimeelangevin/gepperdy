@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import RoundModel from "@/models/Round";
+import type { UpdateRoundRequest } from "@/types/api";
 
 // GET single round by ID
 export async function GET(
@@ -42,7 +43,7 @@ export async function PUT(
   try {
     await connectDB();
     const { id } = await params;
-    const body = await request.json();
+    const body: UpdateRoundRequest = await request.json();
     const { categoryIds } = body;
 
     const round = await RoundModel.findByIdAndUpdate(

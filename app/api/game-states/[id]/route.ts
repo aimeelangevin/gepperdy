@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import connectDB from "@/lib/db";
 import GameStateModel from "@/models/GameState";
+import type { UpdateGameStateRequest } from "@/types/api";
 
 // GET single game state by ID
 export async function GET(
@@ -43,7 +44,7 @@ export async function PUT(
   try {
     await connectDB();
     const { id } = await params;
-    const body = await request.json();
+    const body: UpdateGameStateRequest = await request.json();
     const {
       gameId,
       teams,
