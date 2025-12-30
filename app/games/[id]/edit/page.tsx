@@ -374,9 +374,9 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
   }
 
   return (
-    <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark">
+    <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark relative">
       {/* Header */}
-      <div className="bg-jeopardy-royal border-b-4 border-jeopardy-gold py-6">
+      <div className="bg-jeopardy-royal border-b-4 border-jeopardy-gold py-6 relative z-20">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between">
             <div>
@@ -416,7 +416,7 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
       {/* Round Selector */}
       {rounds.length > 1 && (
         <div className="bg-white dark:bg-slate-900 border-b-2 border-jeopardy-gold/30 py-4">
-          <div className="container mx-auto px-4">
+          <div className="container mx-auto px-4 relative z-20">
             <div className="flex gap-4 justify-center">
               <button
                 onClick={() => setCurrentRoundIndex(0)}
@@ -445,55 +445,6 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
 
       {/* Game Board */}
       <div className="container mx-auto px-4 py-8 relative">
-        {/* Fall Leaves Around Board */}
-        {game?.theme === Theme.Fall && (
-          <>
-            {/* Top Left Leaf */}
-            <div className="absolute -top-12 -left-8 z-10 w-24 h-24 opacity-80">
-              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
-            </div>
-            {/* Top Right Leaf */}
-            <div className="absolute -top-12 -right-8 z-10 w-24 h-24 opacity-80" style={{ transform: 'rotate(45deg)' }}>
-              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
-            </div>
-            {/* Bottom Left Leaf */}
-            <div className="absolute -bottom-12 -left-8 z-10 w-24 h-24 opacity-80" style={{ transform: 'rotate(180deg)' }}>
-              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
-            </div>
-            {/* Bottom Right Leaf */}
-            <div className="absolute -bottom-12 -right-8 z-10 w-24 h-24 opacity-80" style={{ transform: 'rotate(-45deg)' }}>
-              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
-            </div>
-            {/* Left Side Leaves */}
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 -left-8 z-10 w-20 h-20 opacity-70" style={{ transform: 'translateY(-50%) rotate(-90deg)' }}>
-              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
-            </div>
-            <div className="absolute left-0 top-1/4 -left-6 z-10 w-16 h-16 opacity-60" style={{ transform: 'rotate(12deg)' }}>
-              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
-            </div>
-            <div className="absolute left-0 top-3/4 -left-6 z-10 w-16 h-16 opacity-60" style={{ transform: 'rotate(-12deg)' }}>
-              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
-            </div>
-            {/* Right Side Leaves */}
-            <div className="absolute right-0 top-1/2 -translate-y-1/2 -right-8 z-10 w-20 h-20 opacity-70" style={{ transform: 'translateY(-50%) rotate(90deg)' }}>
-              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
-            </div>
-            <div className="absolute right-0 top-1/4 -right-6 z-10 w-16 h-16 opacity-60" style={{ transform: 'rotate(-12deg)' }}>
-              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
-            </div>
-            <div className="absolute right-0 top-3/4 -right-6 z-10 w-16 h-16 opacity-60" style={{ transform: 'rotate(12deg)' }}>
-              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
-            </div>
-            {/* Top Center Leaves */}
-            <div className="absolute top-0 left-1/2 -translate-x-1/2 -top-10 z-10 w-20 h-20 opacity-75">
-              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
-            </div>
-            {/* Bottom Center Leaves */}
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 -bottom-10 z-10 w-20 h-20 opacity-75" style={{ transform: 'rotate(180deg)' }}>
-              <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
-            </div>
-          </>
-        )}
         
         <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 ${
           game?.theme === Theme.Christmas ? 'border-red-600' : 
@@ -758,98 +709,6 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
         </div>
       )}
 
-      {/* Big Pumpkin for Fall Theme */}
-      {game?.theme === Theme.Fall && (
-        <div className="fixed bottom-8 right-4 z-10 pointer-events-none">
-          <img src="/pumpkin.png" alt="pumpkin" className="w-32 h-32 md:w-48 md:h-48 object-contain drop-shadow-lg" />
-        </div>
-      )}
-
-      {/* Wreath for Christmas Theme */}
-      {game?.theme === Theme.Christmas && (
-        <div className="fixed top-32 right-12 z-10 pointer-events-none">
-          <img src="/wreath.png" alt="wreath" className="w-32 h-32 md:w-40 md:h-40 object-contain drop-shadow-lg" />
-        </div>
-      )}
-
-      {/* Snowfall for Christmas Theme */}
-      {game?.theme === Theme.Christmas && (
-        <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
-          {Array.from({ length: 300 }).map((_, i) => {
-            // Generate random values for each flake
-            const randomX = Math.random() * 100; // Random horizontal position
-            const randomY = Math.random() * 100; // Random vertical starting position (distributed throughout screen)
-            const randomDuration = 30 + Math.random() * 25; // Very slow float: 30-55 seconds
-            // Calculate delay so flake appears to start from its random Y position
-            const randomDelay = -(randomY / 100) * randomDuration; // Negative delay to start at random position
-            const randomOpacity = 0.4 + Math.random() * 0.4; // Soft opacity
-            // Random horizontal drift values that change throughout the fall
-            const drift1 = (Math.random() - 0.5) * 80;
-            const drift2 = (Math.random() - 0.5) * 80;
-            const drift3 = (Math.random() - 0.5) * 80;
-            
-            return (
-              <div
-                key={i}
-                className="absolute w-1 h-1 bg-white rounded-full"
-                style={{
-                  left: `${randomX}%`,
-                  top: `${randomY}%`,
-                  opacity: randomOpacity,
-                  animation: `snowfall ${randomDuration}s linear infinite`,
-                  animationDelay: `${randomDelay}s`,
-                  // Use CSS custom properties for random drift
-                  '--drift-1': `${drift1}px`,
-                  '--drift-2': `${drift2}px`,
-                  '--drift-3': `${drift3}px`,
-                } as React.CSSProperties & { '--drift-1': string; '--drift-2': string; '--drift-3': string }}
-              />
-            );
-          })}
-        </div>
-      )}
-
-      {/* Birthday Theme Decorations */}
-      {game?.theme === Theme.Birthday && (
-        <>
-          {/* Banner in top left */}
-          <div className="fixed top-24 left-2 z-10 pointer-events-none" style={{ transform: 'rotate(-30deg)' }}>
-            <img src="/banner.png" alt="banner" className="w-56 h-28 md:w-64 md:h-32 object-contain drop-shadow-lg" />
-          </div>
-
-          {/* Banner in top right (mirrored) */}
-          <div className="fixed top-24 right-2 z-10 pointer-events-none" style={{ transform: 'rotate(30deg) scaleX(-1)' }}>
-            <img src="/banner.png" alt="banner" className="w-56 h-28 md:w-64 md:h-32 object-contain drop-shadow-lg" />
-          </div>
-
-          {/* Present piles at bottom */}
-          <div className="fixed bottom-0 left-0 right-0 z-10 pointer-events-none">
-            {/* Left side present pile */}
-            <div className="absolute bottom-0 left-8 flex items-end gap-2">
-              <img src="/present1.png" alt="present" className="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-md" />
-              <img src="/present2.png" alt="present" className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-md" />
-              <img src="/present1.png" alt="present" className="w-14 h-14 md:w-18 md:h-18 object-contain drop-shadow-md" />
-              <img src="/present2.png" alt="present" className="w-18 h-18 md:w-22 md:h-22 object-contain drop-shadow-md" />
-            </div>
-
-            {/* Center present pile */}
-            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 flex items-end gap-2">
-              <img src="/present2.png" alt="present" className="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-md" />
-              <img src="/present1.png" alt="present" className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-md" />
-              <img src="/present2.png" alt="present" className="w-18 h-18 md:w-22 md:h-22 object-contain drop-shadow-md" />
-              <img src="/present1.png" alt="present" className="w-14 h-14 md:w-18 md:h-18 object-contain drop-shadow-md" />
-            </div>
-
-            {/* Right side present pile */}
-            <div className="absolute bottom-0 right-8 flex items-end gap-2">
-              <img src="/present1.png" alt="present" className="w-18 h-18 md:w-22 md:h-22 object-contain drop-shadow-md" />
-              <img src="/present2.png" alt="present" className="w-14 h-14 md:w-18 md:h-18 object-contain drop-shadow-md" />
-              <img src="/present1.png" alt="present" className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-md" />
-              <img src="/present2.png" alt="present" className="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-md" />
-            </div>
-          </div>
-        </>
-      )}
 
     </div>
   );

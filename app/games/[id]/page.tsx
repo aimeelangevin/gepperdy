@@ -54,6 +54,16 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
   const [isStealMode, setIsStealMode] = useState(false);
   const [originalTeamIndex, setOriginalTeamIndex] = useState<number | null>(null);
   const [stealTeamIndices, setStealTeamIndices] = useState<number[]>([]);
+  
+  // Daily Double state
+  const [showDailyDouble, setShowDailyDouble] = useState(false);
+  const [showWagerInput, setShowWagerInput] = useState(false);
+  const [wagerAmount, setWagerAmount] = useState<string>('');
+  const [dailyDoubleQuestion, setDailyDoubleQuestion] = useState<{
+    catIndex: number;
+    qIndex: number;
+    question: any;
+  } | null>(null);
 
   useEffect(() => {
     loadGame();
@@ -121,6 +131,25 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
         });
       }
       setRounds(roundsData);
+      
+      // Log all Daily Double questions
+      console.log('=== DAILY DOUBLE QUESTIONS ===');
+      roundsData.forEach((round, roundIndex) => {
+        round.categories.forEach((category, catIndex) => {
+          category.questions.forEach((question, qIndex) => {
+            if (question.isDailyDouble) {
+              console.log(`Round ${roundIndex + 1}, Category: "${category.name}", Question ${qIndex + 1}:`, {
+                questionText: question.text,
+                points: question.points,
+                questionId: question._id,
+                catIndex,
+                qIndex,
+              });
+            }
+          });
+        });
+      });
+      console.log('=============================');
       
       // Check for existing game state
       const stateResponse = await gameStateApi.getByGameId(id);
@@ -198,11 +227,28 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       return;
     }
     
+    // Check if this is a Daily Double
+    if (question.isDailyDouble) {
+      console.log('Daily Double detected!', {
+        category: category.name,
+        questionText: question.text,
+        questionId: question._id,
+        points: question.points,
+        catIndex,
+        qIndex,
+      });
+      setDailyDoubleQuestion({ catIndex, qIndex, question });
+      setShowDailyDouble(true);
+      setShowWagerInput(false);
+      setWagerAmount('');
+      setIsAnimating(true);
+    } else {
     setSelectedQuestion({ catIndex, qIndex, question });
-    setShowAnswer(false);
-    setIsStealMode(false);
-    setOriginalTeamIndex(null);
-    setStealTeamIndices([]);
+      setShowAnswer(false);
+      setIsStealMode(false);
+      setOriginalTeamIndex(null);
+      setStealTeamIndices([]);
+    }
   };
 
   const closeQuestion = () => {
@@ -212,6 +258,40 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     setIsStealMode(false);
     setOriginalTeamIndex(null);
     setStealTeamIndices([]);
+    setShowDailyDouble(false);
+    setShowWagerInput(false);
+    setWagerAmount('');
+    setDailyDoubleQuestion(null);
+  };
+
+  const handleWagerSubmit = () => {
+    const wager = parseInt(wagerAmount);
+    if (!dailyDoubleQuestion || !gameState || isNaN(wager) || wager < 0) return;
+    
+    // Get current team's score to validate max wager
+    // In Jeopardy, you can wager up to your current score OR the maximum question value, whichever is higher
+    const currentTeam = gameState.teams[gameState.currentTeamIndex];
+    const maxWager = Math.max(currentTeam.score, dailyDoubleQuestion.question.points);
+    
+    // Clamp wager to valid range (0 to maxWager)
+    const finalWager = Math.min(Math.max(wager, 0), maxWager);
+    
+    // Create a modified question with the wager amount
+    const modifiedQuestion = {
+      ...dailyDoubleQuestion.question,
+      points: finalWager,
+    };
+    
+    setSelectedQuestion({ ...dailyDoubleQuestion, question: modifiedQuestion });
+    setShowDailyDouble(false);
+    setShowWagerInput(false);
+    setWagerAmount('');
+    setDailyDoubleQuestion(null);
+    setShowAnswer(false);
+    setIsStealMode(false);
+    setOriginalTeamIndex(null);
+    setStealTeamIndices([]);
+    setIsAnimating(true);
   };
 
   const revealAnswer = () => {
@@ -289,12 +369,16 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
         setShowAnswer(false); // Keep question visible for steal attempts
 
         // Calculate which teams can steal (all except the original team)
-        const stealIndices = gameState.teams
-          .map((_, idx) => idx)
-          .filter((idx) => idx !== gameState.currentTeamIndex);
+        // Start from currentTeamIndex + 1 and wrap around
+        const numTeams = gameState.teams.length;
+        const stealIndices: number[] = [];
+        for (let i = 1; i < numTeams; i++) {
+          const stealIndex = (gameState.currentTeamIndex + i) % numTeams;
+          stealIndices.push(stealIndex);
+        }
         setStealTeamIndices(stealIndices);
 
-        // Switch to first stealing team if available
+        // Switch to first stealing team (currentTeamIndex + 1, wrapped)
         const nextStealTeamIndex = stealIndices.length > 0 ? stealIndices[0] : gameState.currentTeamIndex;
 
         // Update game state with new team index first, then update state
@@ -585,9 +669,125 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
   const currentTeam = gameState.teams[gameState.currentTeamIndex];
 
   return (
-    <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark">
+    <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark relative">
+      {/* Christmas Theme Decorations */}
+      {game?.theme === Theme.Christmas && (
+        <>
+          {/* Snow at bottom - multiple smaller images */}
+          <div className="fixed bottom-0 left-0 right-0 z-0 pointer-events-none flex items-end">
+            {Array.from({ length: 20 }).map((_, i) => (
+              <img 
+                key={i}
+                src="/snow.png" 
+                alt="snow" 
+                className="h-20 md:h-24 lg:h-28 object-contain flex-1" 
+              />
+            ))}
+          </div>
+          
+          {/* Snowman in bottom left */}
+          <div className="fixed bottom-0 left-4 md:left-8 z-10 pointer-events-none">
+            <img src="/snowman.png" alt="snowman" className="w-20 h-20 md:w-32 md:h-32 lg:w-40 lg:h-40 xl:w-48 xl:h-48 object-contain drop-shadow-lg" />
+          </div>
+          
+          {/* Christmas tree in bottom right */}
+          <div className="fixed bottom-0 right-4 md:right-8 z-10 pointer-events-none">
+            <img src="/tree.png" alt="christmas tree" className="w-28 h-28 md:w-40 md:h-40 lg:w-56 lg:h-56 xl:w-72 xl:h-72 object-contain drop-shadow-lg" />
+          </div>
+        </>
+      )}
+
+      {/* Birthday Theme Decorations */}
+      {game?.theme === Theme.Birthday && (
+        <>
+          {/* Banner in top left */}
+          <div className="fixed top-24 left-2 z-10 pointer-events-none" style={{ transform: 'rotate(-30deg)' }}>
+            <img src="/banner.png" alt="banner" className="w-56 h-28 md:w-64 md:h-32 object-contain drop-shadow-lg" />
+          </div>
+
+          {/* Banner in top right (mirrored) */}
+          <div className="fixed top-24 right-2 z-10 pointer-events-none" style={{ transform: 'rotate(30deg) scaleX(-1)' }}>
+            <img src="/banner.png" alt="banner" className="w-56 h-28 md:w-64 md:h-32 object-contain drop-shadow-lg" />
+          </div>
+
+          {/* Present piles at bottom */}
+          <div className="fixed bottom-0 left-0 right-0 z-10 pointer-events-none">
+            {/* Left side present pile */}
+            <div className="absolute bottom-0 left-8 flex items-end gap-2">
+              <img src="/present1.png" alt="present" className="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-md" />
+              <img src="/present2.png" alt="present" className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-md" />
+              <img src="/present1.png" alt="present" className="w-14 h-14 md:w-18 md:h-18 object-contain drop-shadow-md" />
+              <img src="/present2.png" alt="present" className="w-18 h-18 md:w-22 md:h-22 object-contain drop-shadow-md" />
+            </div>
+
+            {/* Center present pile */}
+            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 flex items-end gap-2">
+              <img src="/present2.png" alt="present" className="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-md" />
+              <img src="/present1.png" alt="present" className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-md" />
+              <img src="/present2.png" alt="present" className="w-18 h-18 md:w-22 md:h-22 object-contain drop-shadow-md" />
+              <img src="/present1.png" alt="present" className="w-14 h-14 md:w-18 md:h-18 object-contain drop-shadow-md" />
+            </div>
+
+            {/* Right side present pile */}
+            <div className="absolute bottom-0 right-8 flex items-end gap-2">
+              <img src="/present1.png" alt="present" className="w-18 h-18 md:w-22 md:h-22 object-contain drop-shadow-md" />
+              <img src="/present2.png" alt="present" className="w-14 h-14 md:w-18 md:h-18 object-contain drop-shadow-md" />
+              <img src="/present1.png" alt="present" className="w-20 h-20 md:w-24 md:h-24 object-contain drop-shadow-md" />
+              <img src="/present2.png" alt="present" className="w-16 h-16 md:w-20 md:h-20 object-contain drop-shadow-md" />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* Fall Theme Decorations */}
+      {game?.theme === Theme.Fall && (
+        <>
+          {/* Top Left Leaf */}
+          <div className="fixed top-12 left-2 z-10 w-24 h-24 opacity-80 pointer-events-none">
+            <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+          </div>
+          {/* Top Right Leaf */}
+          <div className="fixed top-12 right-2 z-10 w-24 h-24 opacity-80 pointer-events-none" style={{ transform: 'rotate(45deg)' }}>
+            <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+          </div>
+          {/* Bottom Left Leaf */}
+          <div className="fixed bottom-24 left-2 z-10 w-24 h-24 opacity-80 pointer-events-none" style={{ transform: 'rotate(180deg)' }}>
+            <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+          </div>
+          {/* Bottom Right Leaf */}
+          <div className="fixed bottom-24 right-2 z-10 w-24 h-24 opacity-80 pointer-events-none" style={{ transform: 'rotate(-45deg)' }}>
+            <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+          </div>
+          {/* Left Side Leaves */}
+          <div className="fixed left-2 top-1/2 -translate-y-1/2 z-10 w-20 h-20 opacity-70 pointer-events-none" style={{ transform: 'translateY(-50%) rotate(-90deg)' }}>
+            <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+          </div>
+          <div className="fixed left-2 top-1/4 z-10 w-16 h-16 opacity-60 pointer-events-none" style={{ transform: 'rotate(12deg)' }}>
+            <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+          </div>
+          <div className="fixed left-2 top-3/4 z-10 w-16 h-16 opacity-60 pointer-events-none" style={{ transform: 'rotate(-12deg)' }}>
+            <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+          </div>
+          {/* Right Side Leaves */}
+          <div className="fixed right-2 top-1/2 -translate-y-1/2 z-10 w-20 h-20 opacity-70 pointer-events-none" style={{ transform: 'translateY(-50%) rotate(90deg)' }}>
+            <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+          </div>
+          <div className="fixed right-2 top-1/4 z-10 w-16 h-16 opacity-60 pointer-events-none" style={{ transform: 'rotate(-12deg)' }}>
+            <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+          </div>
+          <div className="fixed right-2 top-3/4 z-10 w-16 h-16 opacity-60 pointer-events-none" style={{ transform: 'rotate(12deg)' }}>
+            <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
+          </div>
+          
+          {/* Big Pumpkin */}
+          <div className="fixed bottom-8 right-4 z-10 pointer-events-none">
+            <img src="/pumpkin.png" alt="pumpkin" className="w-32 h-32 md:w-48 md:h-48 object-contain drop-shadow-lg" />
+          </div>
+        </>
+      )}
+      
       {/* Header */}
-      <div className="bg-jeopardy-royal border-b-4 border-jeopardy-gold py-4">
+      <div className="bg-jeopardy-royal border-b-4 border-jeopardy-gold py-4 relative z-20">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between">
             <div>
@@ -638,7 +838,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       </div>
 
       {/* Game Board */}
-      <div className="container mx-auto px-2 md:px-4 py-1 md:py-2 h-[calc(100vh-120px)] flex flex-col">
+      <div className="container mx-auto px-2 md:px-4 py-1 md:py-2 h-[calc(100vh-120px)] flex flex-col relative z-20">
         <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 ${
           game?.theme === Theme.Christmas ? 'border-red-600' : 
           game?.theme === Theme.Fall ? 'border-amber-800' : 
@@ -699,6 +899,91 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
         </div>
       </div>
 
+      {/* Daily Double Modal */}
+      {showDailyDouble && dailyDoubleQuestion && gameState && (
+        <div 
+          className="fixed inset-0 z-50 spin-in"
+          style={{
+            background: 'linear-gradient(to bottom, #1e3a8a 0%, #7c3aed 30%, #d946ef 60%, #ea580c 100%)',
+          }}
+        >
+          <div className="w-full h-full flex flex-col items-center justify-center p-8 md:p-12 text-center overflow-hidden relative">
+            {/* Light rays */}
+            <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-30">
+              <div className="absolute top-0 left-0 w-1/2 h-full bg-gradient-to-r from-transparent via-white to-transparent transform -skew-x-12" />
+              <div className="absolute top-0 right-0 w-1/2 h-full bg-gradient-to-l from-transparent via-white to-transparent transform skew-x-12" />
+            </div>
+
+            {!showWagerInput ? (
+              /* Daily Double Title */
+              <div className="relative z-10 cursor-pointer" onClick={() => setShowWagerInput(true)}>
+                <h1 
+                  className="text-6xl md:text-8xl lg:text-9xl xl:text-[12rem] font-black uppercase tracking-wider"
+                  style={{
+                    color: '#FFFFFF',
+                    textShadow: `
+                      0 0 20px rgba(255, 255, 255, 0.5),
+                      0 0 40px rgba(255, 255, 255, 0.3),
+                      2px 2px 0px rgba(0, 0, 0, 0.8),
+                      4px 4px 0px rgba(0, 0, 0, 0.6),
+                      6px 6px 0px rgba(0, 0, 0, 0.4),
+                      8px 8px 0px rgba(0, 0, 0, 0.3),
+                      10px 10px 20px rgba(0, 0, 0, 0.5),
+                      -2px -2px 0px rgba(255, 255, 255, 0.2)
+                    `,
+                    fontFamily: 'Arial, Helvetica, sans-serif',
+                    letterSpacing: '0.1em',
+                  }}
+                >
+                  <div className="mb-4">DAILY</div>
+                  <div>DOUBLE</div>
+                </h1>
+              </div>
+            ) : (
+              /* Wager Input */
+              <div className="relative z-10 flex flex-col items-center gap-8">
+                <h2 className="text-white text-3xl md:text-4xl lg:text-5xl font-bold uppercase tracking-wide" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
+                  {gameState.teams[gameState.currentTeamIndex].name.toUpperCase()}
+              </h2>
+                <div className="flex flex-col items-center gap-4">
+                  <label className="text-white text-xl md:text-2xl font-semibold uppercase tracking-wide" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
+                    ENTER YOUR WAGER
+                  </label>
+                  <div className="flex items-center gap-4">
+                    <span className="text-white text-3xl md:text-4xl font-bold" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>$</span>
+                    <input
+                      type="number"
+                      value={wagerAmount}
+                      onChange={(e) => setWagerAmount(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          handleWagerSubmit();
+                        }
+                      }}
+                      autoFocus
+                      className="text-4xl md:text-5xl lg:text-6xl font-bold text-center w-48 md:w-64 lg:w-80 px-4 py-2 rounded-lg border-4 border-white/50 bg-white/10 text-white placeholder-white/50 focus:outline-none focus:border-white focus:bg-white/20"
+                      placeholder="0"
+                      min="0"
+                      max={Math.max(gameState.teams[gameState.currentTeamIndex]?.score || 0, dailyDoubleQuestion.question.points)}
+                    />
+                  </div>
+                  <p className="text-white/70 text-sm md:text-base" style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.5)' }}>
+                    Maximum: ${Math.max(gameState.teams[gameState.currentTeamIndex]?.score || 0, dailyDoubleQuestion.question.points)}
+                  </p>
+              <button
+                    onClick={handleWagerSubmit}
+                    className="mt-4 px-8 py-4 bg-white/30 hover:bg-white/40 text-white text-xl md:text-2xl font-bold uppercase tracking-wide rounded-lg transition-colors shadow-lg"
+                    style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}
+              >
+                    SUBMIT WAGER
+              </button>
+            </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Question Modal */}
       {selectedQuestion && gameState && (
         <div 
@@ -720,25 +1005,25 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                   </p>
                 )}
                 <div className="flex-1 flex flex-col items-center justify-center gap-4 md:gap-6">
-                  {selectedQuestion.question.text && (
+              {selectedQuestion.question.text && (
                     <p className="text-white text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-sans font-bold leading-tight px-4 uppercase" style={{ textShadow: '4px 4px 8px rgba(0,0,0,0.5)' }}>
                       {selectedQuestion.question.text.toUpperCase()}
-                    </p>
-                  )}
-                  {selectedQuestion.question.imageUrl && (
+                </p>
+              )}
+              {selectedQuestion.question.imageUrl && (
                     <div className="flex items-center justify-center w-full px-4">
-                      <img
-                        src={selectedQuestion.question.imageUrl}
-                        alt="Question"
+                <img
+                  src={selectedQuestion.question.imageUrl}
+                  alt="Question"
                         className="max-w-full max-h-[50vh] w-auto h-auto object-contain rounded-lg"
-                      />
+                />
                     </div>
-                  )}
-                  {selectedQuestion.question.audioUrl && (
+              )}
+              {selectedQuestion.question.audioUrl && (
                     <audio controls autoPlay className="w-full max-w-2xl">
-                      <source src={selectedQuestion.question.audioUrl} />
-                    </audio>
-                  )}
+                  <source src={selectedQuestion.question.audioUrl} />
+                </audio>
+              )}
                 </div>
                 <div className="absolute bottom-8 flex flex-col items-center gap-4">
                   <div className="flex gap-6">
@@ -769,7 +1054,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                 <p className="text-white/70 text-lg md:text-xl font-sans uppercase tracking-wide absolute bottom-8">
                   CLICK TO CLOSE
                 </p>
-              </div>
+            </div>
             )}
           </div>
         </div>
