@@ -403,6 +403,122 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
                 Back to all games
               </Link>
               <button
+                onClick={() => {
+                  const printWindow = window.open('', '_blank');
+                  if (!printWindow) return;
+                  
+                  const currentRound = rounds[currentRoundIndex];
+                  if (!currentRound) return;
+                  
+                  const html = `
+                    <!DOCTYPE html>
+                    <html>
+                      <head>
+                        <title>${game?.name || 'Game'} - Answers</title>
+                        <style>
+                          @page {
+                            size: letter landscape;
+                            margin: 0.25in;
+                          }
+                          body {
+                            font-family: Arial, sans-serif;
+                            margin: 0;
+                            padding: 0;
+                          }
+                          .print-header {
+                            text-align: center;
+                            margin-bottom: 15px;
+                            border-bottom: 3px solid #000;
+                            padding-bottom: 8px;
+                          }
+                          .print-header h1 {
+                            margin: 0;
+                            font-size: 28px;
+                            font-weight: bold;
+                            text-transform: uppercase;
+                          }
+                          .print-header h2 {
+                            margin: 5px 0 0 0;
+                            font-size: 20px;
+                            font-weight: normal;
+                          }
+                          .answers-grid {
+                            width: 100%;
+                            border-collapse: collapse;
+                            font-size: 12px;
+                            height: calc(100vh - 120px);
+                          }
+                          .answers-grid th {
+                            font-weight: bold;
+                            padding: 12px 6px;
+                            text-align: center;
+                            border: 2px solid #000;
+                            font-size: 14px;
+                            text-transform: uppercase;
+                          }
+                          .answers-grid td {
+                            border: 1px solid #000;
+                            padding: 10px 6px;
+                            text-align: center;
+                            vertical-align: top;
+                            height: 15%;
+                          }
+                          .points-header {
+                            font-weight: bold;
+                            padding: 12px 6px;
+                            text-align: center;
+                            border: 2px solid #000;
+                            font-size: 14px;
+                          }
+                          .answer-cell {
+                            font-size: 12px;
+                            line-height: 1.3;
+                            word-wrap: break-word;
+                          }
+                        </style>
+                      </head>
+                      <body>
+                        <div class="print-header">
+                          <h1>${game?.name || 'Game'} - Answer Key</h1>
+                        </div>
+                        <table class="answers-grid">
+                          <thead>
+                            <tr>
+                              <th class="points-header"></th>
+                              ${currentRound.categories.map((cat: any) => 
+                                `<th>${cat.name || 'Category'}</th>`
+                              ).join('')}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            ${[0, 1, 2, 3, 4].map((qIndex) => `
+                              <tr>
+                                <td class="points-header">$${currentRound.categories[0]?.questions[qIndex]?.points || (qIndex + 1) * (currentRoundIndex === 0 ? 200 : 400)}</td>
+                                ${currentRound.categories.map((category: any) => {
+                                  const question = category.questions[qIndex];
+                                  const answer = question?.answer || '';
+                                  return `<td class="answer-cell">${answer}</td>`;
+                                }).join('')}
+                              </tr>
+                            `).join('')}
+                          </tbody>
+                        </table>
+                      </body>
+                    </html>
+                  `;
+                  
+                  printWindow.document.write(html);
+                  printWindow.document.close();
+                  printWindow.focus();
+                  setTimeout(() => {
+                    printWindow.print();
+                  }, 250);
+                }}
+                className="bg-jeopardy-blue hover:bg-jeopardy-blue-light text-jeopardy-gold font-bold py-2 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold"
+              >
+                Print Answers
+              </button>
+              <button
                 onClick={handleLogout}
                 className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-lg uppercase tracking-wide text-sm border-2 border-jeopardy-gold/50 hover:border-jeopardy-gold"
               >
