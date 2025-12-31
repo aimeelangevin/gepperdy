@@ -47,10 +47,13 @@ export async function PUT(
     const body: UpdateGameStateRequest = await request.json();
     const {
       gameId,
+      state,
       teams,
       currentTeamIndex,
+      questionPickerTeamIndex,
       currentRoundIndex,
       completedQuestionIds,
+      buzzedTeamId,
     } = body;
 
     // Validate that all teams have IDs if teams are being updated
@@ -68,10 +71,15 @@ export async function PUT(
       id,
       {
         ...(gameId !== undefined && { gameId }),
+        ...(state !== undefined && { state }),
         ...(teams !== undefined && { teams }),
         ...(currentTeamIndex !== undefined && { currentTeamIndex }),
+        ...(questionPickerTeamIndex !== undefined && {
+          questionPickerTeamIndex,
+        }),
         ...(currentRoundIndex !== undefined && { currentRoundIndex }),
         ...(completedQuestionIds !== undefined && { completedQuestionIds }),
+        ...(buzzedTeamId !== undefined && { buzzedTeamId }),
       },
       { new: true, runValidators: true }
     ).lean();

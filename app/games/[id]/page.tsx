@@ -10,7 +10,8 @@ import type { Question } from '@/models/Question';
 import type { GameState, Team } from '@/models/GameState';
 import { Theme } from '@/types/theme';
 import Link from 'next/link';
-import ProtectedRoute from '@/components/ProtectedRoute';
+import { getUserId } from '@/lib/auth';
+
 // Simple UUID v4 generator for browser
 const generateUUID = (): string => {
   if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
@@ -38,16 +39,21 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Team setup state
-  const [numTeams, setNumTeams] = useState(2);
-  const [teamNames, setTeamNames] = useState<string[]>(['Team 1', 'Team 2']);
-  const [settingUpTeams, setSettingUpTeams] = useState(false);
+  // Waiting screen state (for host to wait for teams to join)
+  const [waitingForTeams, setWaitingForTeams] = useState(false);
+  
+  // SSE connection error state
+  const [sseError, setSseError] = useState(false);
+  
+  // Buzz-in processing state (to prevent race conditions)
+  const [isBuzzingIn, setIsBuzzingIn] = useState(false);
   
   // Question display state
   const [selectedQuestion, setSelectedQuestion] = useState<{
     catIndex: number;
     qIndex: number;
     question: any;
+    pickerTeamIndex: number; // Team that picked this question
   } | null>(null);
   const [showAnswer, setShowAnswer] = useState(false);
   const [isAnimating, setIsAnimating] = useState(false);
@@ -63,6 +69,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     catIndex: number;
     qIndex: number;
     question: any;
+    pickerTeamIndex: number;
   } | null>(null);
   
   // Audio ref for Daily Double sound
@@ -165,14 +172,34 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       });
       console.log('=============================');
       
-      // Check for existing game state
+      // Check for existing game state, create one if it doesn't exist
       const stateResponse = await gameStateApi.getByGameId(id);
       if (stateResponse.success && stateResponse.data) {
         setGameState(stateResponse.data);
-        setSettingUpTeams(false);
+        // If no teams have joined yet, show waiting screen
+        if (stateResponse.data.teams.length === 0) {
+          setWaitingForTeams(true);
+        } else {
+          setWaitingForTeams(false);
+        }
       } else {
-        setGameState(null);
-        setSettingUpTeams(true);
+        // Create a new game state with empty teams (this will generate a join code)
+        // The backend will check if one already exists and return it instead of creating a duplicate
+          const createResponse = await gameStateApi.create({
+            gameId: id,
+            teams: [],
+            currentTeamIndex: 0,
+            questionPickerTeamIndex: 0,
+            currentRoundIndex: 0,
+            completedQuestionIds: [],
+          });
+        if (createResponse.success && createResponse.data) {
+          console.log('Game state with joinCode:', createResponse.data.joinCode);
+          setGameState(createResponse.data);
+          setWaitingForTeams(true); // Show waiting screen
+        } else {
+          setError(createResponse.error || 'Failed to create game state');
+        }
       }
     } catch (err) {
       setError('Failed to load game');
@@ -182,53 +209,81 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     }
   };
 
-  const handleTeamSetup = async () => {
+  // SSE connection for real-time game state updates
+  useEffect(() => {
+    if (!id) return;
+
+    setSseError(false); // Reset error state when reconnecting
+    const eventSource = new EventSource(`/api/game-states/stream/${id}`);
+
+    eventSource.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+
+        if (message.type === 'update' && message.data) {
+          // Only update state if we're not in the middle of a buzz-in operation
+          // OR if the server confirms our buzz-in (buzzedTeamId matches our optimistic update)
+          // This prevents race conditions where optimistic updates get overwritten by stale SSE updates
+          if (!isBuzzingIn) {
+            setGameState(message.data);
+          } else if (message.data.buzzedTeamId) {
+            // Server confirmed a buzz-in, update state and clear the flag
+            setGameState(message.data);
+            setIsBuzzingIn(false);
+          }
+          // Update waiting state for host
+          if (message.data.state === 'setup' && message.data.teams.length === 0) {
+            setWaitingForTeams(true);
+          } else if (message.data.state === 'active' || message.data.state === 'question_active' || message.data.state === 'answering' || message.data.state === 'showing_answer') {
+            setWaitingForTeams(false);
+          }
+        } else if (message.type === 'connected') {
+          console.log('SSE connected');
+          setSseError(false); // Clear error on successful connection
+        } else if (message.type === 'error') {
+          console.error('SSE error:', message.error);
+          setSseError(true);
+        }
+      } catch (err) {
+        console.error('Failed to parse SSE message:', err);
+      }
+    };
+
+    eventSource.onerror = (error) => {
+      console.error('SSE connection error:', error);
+      setSseError(true);
+      eventSource.close();
+    };
+
+    return () => {
+      eventSource.close();
+    };
+  }, [id, isBuzzingIn]);
+
+  const handleStartGame = async () => {
+    if (!gameState || gameState.teams.length === 0) {
+      setError('At least one team must join before starting');
+      return;
+    }
+    
+    // Update game state to 'active'
     try {
-      const teams: Team[] = teamNames.slice(0, numTeams).map((name, index) => ({
-        id: generateUUID(),
-        name: name.trim() || `Team ${index + 1}`,
-        score: 0,
-      }));
-
-      console.log('Creating game state with teams:', teams);
-
-      const response = await gameStateApi.create({
-        gameId: id,
-        teams: teams,
-        currentTeamIndex: 0,
-        currentRoundIndex: 0,
-        completedQuestionIds: [],
+      const response = await gameStateApi.update(gameState._id.toString(), {
+        state: 'active',
       });
-
       if (response.success && response.data) {
         setGameState(response.data);
-        setSettingUpTeams(false);
+        setWaitingForTeams(false);
       } else {
-        setError(response.error || 'Failed to create game state');
+        setError(response.error || 'Failed to start game');
       }
     } catch (err) {
-      setError('Failed to set up teams');
+      setError('Failed to start game');
       console.error(err);
     }
   };
 
-  const handleNumTeamsChange = (newNum: number) => {
-    if (newNum < 2 || newNum > 6) return;
-    setNumTeams(newNum);
-    const newNames = [...teamNames];
-    while (newNames.length < newNum) {
-      newNames.push(`Team ${newNames.length + 1}`);
-    }
-    setTeamNames(newNames.slice(0, newNum));
-  };
-
-  const handleTeamNameChange = (index: number, name: string) => {
-    const newNames = [...teamNames];
-    newNames[index] = name;
-    setTeamNames(newNames);
-  };
-
-  const handleCellClick = (catIndex: number, qIndex: number) => {
+  const handleCellClick = async (catIndex: number, qIndex: number) => {
     if (!rounds.length || !gameState) return;
     
     const currentRound = rounds[gameState.currentRoundIndex];
@@ -254,21 +309,40 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
         catIndex,
         qIndex,
       });
-      setDailyDoubleQuestion({ catIndex, qIndex, question });
+      const pickerTeamIndex = gameState.questionPickerTeamIndex ?? gameState.currentTeamIndex;
+      setDailyDoubleQuestion({ catIndex, qIndex, question, pickerTeamIndex });
       setShowDailyDouble(true);
       setShowWagerInput(false);
       setWagerAmount('');
       setIsAnimating(true);
+      
+      // Don't set state to question_active yet - wait until wager is submitted
+      // Keep state as 'active' so clients see "waiting for question" during wagering
     } else {
-    setSelectedQuestion({ catIndex, qIndex, question });
+      const pickerTeamIndex = gameState.questionPickerTeamIndex ?? gameState.currentTeamIndex;
+      setSelectedQuestion({ catIndex, qIndex, question, pickerTeamIndex });
       setShowAnswer(false);
       setIsStealMode(false);
       setOriginalTeamIndex(null);
       setStealTeamIndices([]);
+      
+      // Update game state to question_active when question is selected
+      const updateResponse = await gameStateApi.update(gameState._id.toString(), {
+        state: 'question_active',
+        buzzedTeamId: null, // Clear any previous buzz-in
+        questionPickerTeamIndex: pickerTeamIndex, // Track which team picked this question
+      });
+      console.log('[Host] Updated state to question_active:', updateResponse);
     }
   };
 
-  const closeQuestion = () => {
+  const closeQuestion = async () => {
+    // If we're closing without a correct answer (showAnswer is false and we're in steal mode),
+    // the original picker team should still control the board
+    if (gameState && selectedQuestion && !showAnswer && isStealMode) {
+      await handleQuestionClosedNoCorrectAnswer();
+    }
+    
     setSelectedQuestion(null);
     setShowAnswer(false);
     setIsAnimating(false);
@@ -279,9 +353,17 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     setShowWagerInput(false);
     setWagerAmount('');
     setDailyDoubleQuestion(null);
+    
+    // Reset game state back to active (question closed, ready for next question)
+    if (gameState) {
+      await gameStateApi.update(gameState._id.toString(), {
+        state: 'active',
+        buzzedTeamId: null, // Clear buzz-in
+      });
+    }
   };
 
-  const handleWagerSubmit = () => {
+  const handleWagerSubmit = async () => {
     const wager = parseInt(wagerAmount);
     if (!dailyDoubleQuestion || !gameState || isNaN(wager) || wager < 0) return;
     
@@ -300,7 +382,12 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       points: finalWager, // Wager replaces original question points
     };
     
-    setSelectedQuestion({ ...dailyDoubleQuestion, question: modifiedQuestion });
+    setSelectedQuestion({ 
+      catIndex: dailyDoubleQuestion.catIndex,
+      qIndex: dailyDoubleQuestion.qIndex,
+      question: modifiedQuestion,
+      pickerTeamIndex: dailyDoubleQuestion.pickerTeamIndex,
+    });
     setShowDailyDouble(false);
     setShowWagerInput(false);
     setWagerAmount('');
@@ -327,15 +414,18 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
   const updateGameState = async (updates: {
     teams?: Team[];
     currentTeamIndex?: number;
+    questionPickerTeamIndex?: number;
+    state?: string;
     completedQuestionIds?: string[];
     currentRoundIndex?: number;
+    buzzedTeamId?: string | null;
   }) => {
     if (!gameState) return;
 
     try {
       const response = await gameStateApi.update(gameState._id.toString(), {
         ...updates,
-        teams: updates.teams ? (updates.teams as any) : undefined,
+        teams: updates.teams ? (updates.teams as Team[]) : undefined,
       });
       if (response.success && response.data) {
         const updatedState = response.data;
@@ -383,148 +473,122 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
   const handleAnswer = async (isCorrect: boolean) => {
     if (!gameState || !selectedQuestion) return;
 
-    const currentTeam = gameState.teams[gameState.currentTeamIndex];
+    // Get the team that buzzed in (from buzzedTeamId)
+    const buzzedTeamId = gameState.buzzedTeamId;
+    if (!buzzedTeamId) return; // Should have a buzzed team at this point
+    
+    const buzzedTeamIndex = gameState.teams.findIndex(t => t.id === buzzedTeamId);
+    if (buzzedTeamIndex === -1) return;
+
     const question = selectedQuestion.question;
     const questionId = question._id.toString();
     const points = question.points;
 
     if (isCorrect) {
-      // Team got it right - reveal answer before closing
+      // Team got it right - they now control the board (get to pick next question)
       setShowAnswer(true);
       
       const updatedTeams = gameState.teams.map((team, idx) => 
-        idx === gameState.currentTeamIndex
+        idx === buzzedTeamIndex
           ? { id: team.id, name: team.name, score: team.score + points }
           : { id: team.id, name: team.name, score: team.score }
       );
 
-      const nextTeamIndex = getNextTeamIndex(gameState.currentTeamIndex);
       const completedQuestionIds = [...gameState.completedQuestionIds, questionId];
 
       await updateGameState({
         teams: updatedTeams as any,
-        currentTeamIndex: nextTeamIndex,
+        questionPickerTeamIndex: buzzedTeamIndex, // The team that answered correctly now controls the board
+        currentTeamIndex: buzzedTeamIndex, // Also update for backwards compatibility
         completedQuestionIds,
+        state: 'showing_answer', // Set state to showing_answer so clients see "waiting for next question"
+        buzzedTeamId: null, // Clear buzz-in when question is answered
       });
 
     } else {
-      // Team got it wrong
-      if (!isStealMode) {
-        // First wrong answer - deduct points and enter steal mode
-        const updatedTeams = gameState.teams.map((team, idx) =>
-          idx === gameState.currentTeamIndex
-            ? { id: team.id, name: team.name, score: team.score - points }
-            : { id: team.id, name: team.name, score: team.score }
-        );
+      // Team got it wrong - deduct points and allow anyone to buzz in to steal
+      const updatedTeams = gameState.teams.map((team, idx) =>
+        idx === buzzedTeamIndex
+          ? { id: team.id, name: team.name, score: team.score - points }
+          : { id: team.id, name: team.name, score: team.score }
+      );
 
-        setOriginalTeamIndex(gameState.currentTeamIndex);
-        setIsStealMode(true);
-        setShowAnswer(false); // Keep question visible for steal attempts
-
-        // Calculate which teams can steal (all except the original team)
-        // Start from currentTeamIndex + 1 and wrap around
-        const numTeams = gameState.teams.length;
-        const stealIndices: number[] = [];
-        for (let i = 1; i < numTeams; i++) {
-          const stealIndex = (gameState.currentTeamIndex + i) % numTeams;
-          stealIndices.push(stealIndex);
-        }
-        setStealTeamIndices(stealIndices);
-
-        // Switch to first stealing team (currentTeamIndex + 1, wrapped)
-        const nextStealTeamIndex = stealIndices.length > 0 ? stealIndices[0] : gameState.currentTeamIndex;
-
-        // Update game state with new team index first, then update state
-        const updatedGameState = {
-          ...gameState,
-          teams: updatedTeams as any,
-          currentTeamIndex: nextStealTeamIndex,
-        };
-        setGameState(updatedGameState as any);
-
-        await updateGameState({
-          teams: updatedTeams as any,
-          currentTeamIndex: nextStealTeamIndex,
-        });
-      } else {
-        // Wrong answer during steal mode
-        if (stealTeamIndices.length > 0) {
-          // Move to next stealing team
-          const remainingStealIndices = stealTeamIndices.slice(1);
-          setStealTeamIndices(remainingStealIndices);
-
-          if (remainingStealIndices.length > 0) {
-            // Update current team to next stealing team
-            setShowAnswer(false); // Keep question visible for next steal attempt
-            await updateGameState({
-              currentTeamIndex: remainingStealIndices[0],
-            });
-          } else {
-            // Last steal attempt failed - reveal answer
-            setShowAnswer(true);
-            const nextTeamIndex = getNextTeamIndex(originalTeamIndex!);
-            const completedQuestionIds = [...gameState.completedQuestionIds, questionId];
-
-            await updateGameState({
-              currentTeamIndex: nextTeamIndex,
-              completedQuestionIds,
-            });
-          }
-        }
-      }
+      setIsStealMode(true);
+      setShowAnswer(false); // Keep question visible for steal attempts
+      
+      // Update teams (points deducted) but keep question active for stealing
+      // Anyone can now buzz in to steal (buzzedTeamId will be set when they buzz)
+      // Keep state as 'question_active' so clients can buzz in again
+      await updateGameState({
+        teams: updatedTeams as any,
+        state: 'question_active', // Ensure state is question_active so clients can buzz in
+        buzzedTeamId: null, // Clear buzz-in so anyone can buzz in to steal
+      });
     }
   };
 
   const handleStealAnswer = async (isCorrect: boolean) => {
-    if (!gameState || !selectedQuestion || !isStealMode || stealTeamIndices.length === 0) return;
+    if (!gameState || !selectedQuestion || !isStealMode) return;
 
-    const currentTeam = gameState.teams[gameState.currentTeamIndex];
+    // Get the team that buzzed in to steal (from buzzedTeamId)
+    const buzzedTeamId = gameState.buzzedTeamId;
+    if (!buzzedTeamId) return;
+    
+    const buzzedTeamIndex = gameState.teams.findIndex(t => t.id === buzzedTeamId);
+    if (buzzedTeamIndex === -1) return;
+
     const question = selectedQuestion.question;
     const questionId = question._id.toString();
     const points = question.points;
 
     if (isCorrect) {
-      // Stealing team got it right - reveal answer before closing
+      // Stealing team got it right - they now control the board
       setShowAnswer(true);
       
       const updatedTeams = gameState.teams.map((team, idx) =>
-        idx === gameState.currentTeamIndex
+        idx === buzzedTeamIndex
           ? { id: team.id, name: team.name, score: team.score + points }
           : { id: team.id, name: team.name, score: team.score }
       );
 
-      const nextTeamIndex = getNextTeamIndex(gameState.currentTeamIndex);
       const completedQuestionIds = [...gameState.completedQuestionIds, questionId];
 
       await updateGameState({
         teams: updatedTeams as any,
-        currentTeamIndex: nextTeamIndex,
+        questionPickerTeamIndex: buzzedTeamIndex, // The stealing team now controls the board
+        currentTeamIndex: buzzedTeamIndex, // Also update for backwards compatibility
         completedQuestionIds,
+        state: 'showing_answer', // Set state to showing_answer so clients see "waiting for next question"
+        buzzedTeamId: null, // Clear buzz-in
       });
 
     } else {
-      // Stealing team got it wrong - no points lost, move to next stealing team
-      const remainingStealIndices = stealTeamIndices.slice(1);
-      setStealTeamIndices(remainingStealIndices);
-
-      if (remainingStealIndices.length > 0) {
-        // More steal attempts available - keep question visible
-        setShowAnswer(false);
-        await updateGameState({
-          currentTeamIndex: remainingStealIndices[0],
-        });
-      } else {
-        // Last steal attempt failed - reveal answer
-        setShowAnswer(true);
-        const nextTeamIndex = getNextTeamIndex(originalTeamIndex!);
-        const completedQuestionIds = [...gameState.completedQuestionIds, questionId];
-
-        await updateGameState({
-          currentTeamIndex: nextTeamIndex,
-          completedQuestionIds,
-        });
-      }
+      // Stealing team got it wrong - no points lost, allow anyone else to buzz in
+      // Clear the buzz-in so another team can try
+      setShowAnswer(false); // Keep question visible for next steal attempt
+      await updateGameState({
+        state: 'question_active', // Ensure state is question_active so clients can buzz in
+        buzzedTeamId: null, // Clear so another team can buzz in
+      });
     }
+  };
+
+  // Handle when question is closed without anyone answering correctly (all teams got it wrong)
+  const handleQuestionClosedNoCorrectAnswer = async () => {
+    if (!gameState || !selectedQuestion) return;
+    
+    const questionId = selectedQuestion.question._id.toString();
+    const pickerTeamIndex = selectedQuestion.pickerTeamIndex;
+    
+    // Original picker team still controls the board (can pick another question)
+    const completedQuestionIds = [...gameState.completedQuestionIds, questionId];
+    
+    await updateGameState({
+      questionPickerTeamIndex: pickerTeamIndex, // Keep original picker
+      currentTeamIndex: pickerTeamIndex, // Also update for backwards compatibility
+      completedQuestionIds,
+      buzzedTeamId: null,
+    });
   };
 
   // Helper function to get theme-specific cell colors
@@ -619,6 +683,11 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     );
   }
 
+  // Determine if current user is the host (owns the game)
+  // Clients won't be logged in, so if there's no userId, they're definitely not the host
+  const currentUserId = getUserId();
+  const isHost = game ? (currentUserId !== null && currentUserId === game.userId) : false;
+
   if (error) {
     return (
       <>
@@ -627,10 +696,10 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
           <div className="text-center">
             <p className="text-jeopardy-magenta text-xl font-bold font-sans mb-4 uppercase">{error?.toUpperCase()}</p>
             <Link
-              href="/games"
+              href={isHost ? "/games" : "/"}
               className="inline-block bg-jeopardy-blue hover:bg-jeopardy-blue-light text-jeopardy-gold font-bold py-3 px-8 rounded-lg transition-colors uppercase tracking-wide"
             >
-              Back to Games
+              {isHost ? "Back to Games" : "Go Home"}
             </Link>
           </div>
         </div>
@@ -642,80 +711,329 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     return null;
   }
 
-  // Team setup screen
-  if (settingUpTeams) {
+  // If no game state, show error (clients need to join via join code first)
+  if (!gameState) {
     return (
       <>
         {dailyDoubleAudio}
-        <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark py-12 px-4">
-        <div className="max-w-2xl mx-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold p-8">
-            <h1 className="text-4xl font-bold text-jeopardy-gold mb-2 tracking-wide font-sans text-center uppercase">
-              SET UP TEAMS
-            </h1>
-            <p className="text-slate-600 dark:text-slate-400 text-center mb-8 uppercase">
-              HOW MANY TEAMS ARE PLAYING?
+        <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center">
+          <div className="text-center">
+            <p className="text-jeopardy-magenta text-xl font-bold font-sans mb-4 uppercase">
+              {isHost ? 'Game state not found' : 'Please join this game using a join code'}
             </p>
+            <Link
+              href={isHost ? "/games" : "/"}
+              className="inline-block bg-jeopardy-blue hover:bg-jeopardy-blue-light text-jeopardy-gold font-bold py-3 px-8 rounded-lg transition-colors uppercase tracking-wide"
+            >
+              {isHost ? 'Back to Games' : 'Go Home'}
+            </Link>
+          </div>
+        </div>
+      </>
+    );
+  }
 
-            {/* Number of teams selector */}
-            <div className="mb-8">
-              <label className="block text-lg font-bold text-slate-900 dark:text-white mb-4 uppercase">
-                NUMBER OF TEAMS
-              </label>
-              <div className="flex gap-4 justify-center">
-                {[2, 3, 4, 5, 6].map((num) => (
-                  <button
-                    key={num}
-                    onClick={() => handleNumTeamsChange(num)}
-                    className={`w-16 h-16 rounded-lg font-bold text-xl transition-all ${
-                      numTeams === num
-                        ? 'bg-jeopardy-blue text-jeopardy-gold border-4 border-jeopardy-gold'
-                        : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
-                    }`}
-                  >
-                    {num}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Team names */}
-            <div className="mb-8">
-              <label className="block text-lg font-bold text-slate-900 dark:text-white mb-4 uppercase">
-                TEAM NAMES
-              </label>
-              <div className="space-y-3">
-                {teamNames.slice(0, numTeams).map((name, index) => (
-                  <input
-                    key={index}
-                    type="text"
-                    value={name}
-                    onChange={(e) => handleTeamNameChange(index, e.target.value)}
-                    placeholder={`Team ${index + 1}`}
-                    className="w-full px-4 py-3 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-jeopardy-magenta dark:focus:border-jeopardy-gold focus:outline-none transition-colors"
-                  />
-                ))}
-              </div>
-            </div>
-
-            {/* Start game button */}
-            <div className="flex gap-4">
-              <Link
-                href="/games"
-                className="flex-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-bold py-3 px-6 rounded-lg transition-colors text-center uppercase tracking-wide"
-              >
-                Cancel
-              </Link>
+  // CLIENT VIEWS (user is not the host)
+  if (!isHost) {
+    // Show SSE connection error for clients
+    if (sseError) {
+      return (
+        <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center p-4">
+          <div className="max-w-md mx-auto text-center">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-red-500 p-8">
+              <h1 className="text-3xl font-bold text-red-500 mb-4 tracking-wide font-sans uppercase">
+                Connection Error
+              </h1>
+              <p className="text-slate-600 dark:text-slate-400 text-lg mb-6">
+                Lost connection to the game. Please reload the page to reconnect.
+              </p>
               <button
-                onClick={handleTeamSetup}
-                className="flex-1 bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold"
+                onClick={() => window.location.reload()}
+                className="bg-jeopardy-blue hover:bg-jeopardy-blue-light text-jeopardy-gold font-bold py-3 px-8 rounded-lg transition-colors uppercase tracking-wide"
               >
-                Start Game
+                Reload Page
               </button>
             </div>
           </div>
         </div>
-      </div>
+      );
+    }
+
+    // Client waiting screen (when state is 'setup')
+    if (gameState.state === 'setup') {
+      return (
+        <>
+          {dailyDoubleAudio}
+          <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center p-4">
+            <div className="max-w-md mx-auto text-center">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold p-8">
+                <h1 className="text-4xl font-bold text-jeopardy-gold mb-4 tracking-wide font-sans uppercase">
+                  Waiting for Host
+                </h1>
+                <p className="text-slate-600 dark:text-slate-400 text-lg mb-6">
+                  The host will start the game soon...
+                </p>
+                <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-jeopardy-royal mx-auto"></div>
+              </div>
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    // Client buzz-in view (when state is 'active' or 'question_active')
+    if (gameState.state === 'active' || gameState.state === 'question_active') {
+      // Find the client's team ID from URL params or localStorage
+      const urlParams = new URLSearchParams(window.location.search);
+      const teamId = urlParams.get('teamId') || localStorage.getItem(`game_${id}_teamId`);
+      
+      const canBuzzIn = gameState.state === 'question_active' && !gameState.buzzedTeamId;
+      const hasBuzzedIn = gameState.buzzedTeamId === teamId;
+      const someoneElseBuzzedIn = gameState.buzzedTeamId && gameState.buzzedTeamId !== teamId;
+
+      console.log('Client view - state:', gameState.state, 'canBuzzIn:', canBuzzIn, 'buzzedTeamId:', gameState.buzzedTeamId, 'teamId:', teamId);
+
+      return (
+        <>
+          {dailyDoubleAudio}
+          <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center p-4">
+            <div className="max-w-md mx-auto text-center">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold p-8">
+                {gameState.state === 'active' ? (
+                  <>
+                    <h1 className="text-3xl font-bold text-jeopardy-gold mb-8 tracking-wide font-sans uppercase">
+                      Waiting for Question
+                    </h1>
+                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-jeopardy-royal mx-auto"></div>
+                  </>
+                ) : canBuzzIn ? (
+                  <>
+                    <h1 className="text-3xl font-bold text-jeopardy-gold mb-8 tracking-wide font-sans uppercase">
+                      Ready to Buzz In
+                    </h1>
+                    <button
+                      className="w-full h-64 bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold text-6xl rounded-xl transition-all shadow-lg uppercase tracking-wide border-4 border-jeopardy-gold hover:border-jeopardy-gold-light active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={async () => {
+                        if (!teamId || !gameState || !canBuzzIn || isBuzzingIn) return;
+                        
+                        setIsBuzzingIn(true); // Prevent multiple simultaneous calls
+                        
+                        // Optimistic update: immediately update local state for instant feedback
+                        setGameState({
+                          ...gameState,
+                          buzzedTeamId: teamId,
+                          state: 'answering',
+                        });
+                        
+                        try {
+                          const response = await gameStateApi.buzzIn(gameState._id.toString(), teamId);
+                          // Update with server response if successful
+                          if (response.success && response.data) {
+                            setGameState(response.data);
+                          }
+                          // Allow a brief delay before re-enabling to prevent rapid clicks
+                          setTimeout(() => setIsBuzzingIn(false), 500);
+                        } catch (err) {
+                          console.error('Failed to buzz in:', err);
+                          // Revert optimistic update on error
+                          setGameState({
+                            ...gameState,
+                            buzzedTeamId: null,
+                            state: 'question_active',
+                          });
+                          setIsBuzzingIn(false);
+                        }
+                      }}
+                      disabled={!canBuzzIn || !teamId || isBuzzingIn}
+                    >
+                      BUZZ IN
+                    </button>
+                  </>
+                ) : hasBuzzedIn ? (
+                  <>
+                    <h1 className="text-4xl font-bold text-jeopardy-gold mb-4 tracking-wide font-sans uppercase">
+                      You Buzzed In!
+                    </h1>
+                    <p className="text-slate-600 dark:text-slate-400 text-lg">
+                      Waiting for the host...
+                    </p>
+                  </>
+                ) : someoneElseBuzzedIn ? (
+                  <>
+                    <h1 className="text-3xl font-bold text-slate-600 dark:text-slate-400 mb-4 tracking-wide font-sans uppercase">
+                      Someone Else Buzzed In
+                    </h1>
+                    <p className="text-slate-600 dark:text-slate-400 text-lg">
+                      Wait for the next question...
+                    </p>
+                  </>
+                ) : null}
+              </div>
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    // Client showing answer view (when state is 'showing_answer')
+    if (gameState.state === 'showing_answer') {
+      return (
+        <>
+          {dailyDoubleAudio}
+          <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center p-4">
+            <div className="max-w-md mx-auto text-center">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold p-8">
+                <h1 className="text-3xl font-bold text-jeopardy-gold mb-4 tracking-wide font-sans uppercase">
+                  Waiting for Next Question
+                </h1>
+              </div>
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    // Client answering view (when state is 'answering' and they buzzed in)
+    if (gameState.state === 'answering') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const teamId = urlParams.get('teamId') || localStorage.getItem(`game_${id}_teamId`);
+      const isMyTurn = gameState.buzzedTeamId === teamId;
+
+      return (
+        <>
+          {dailyDoubleAudio}
+          <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center p-4">
+            <div className="max-w-md mx-auto text-center">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold p-8">
+                {isMyTurn ? (
+                  <>
+                    <h1 className="text-4xl font-bold text-jeopardy-gold mb-4 tracking-wide font-sans uppercase">
+                      It's Your Turn!
+                    </h1>
+                    <p className="text-slate-600 dark:text-slate-400 text-lg">
+                      The host is waiting for your answer...
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <h1 className="text-3xl font-bold text-slate-600 dark:text-slate-400 mb-4 tracking-wide font-sans uppercase">
+                      Waiting for Answer
+                    </h1>
+                    <p className="text-slate-600 dark:text-slate-400 text-lg">
+                      Another team is answering...
+                    </p>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </>
+      );
+    }
+
+    // Client finished view (when state is 'finished')
+    if (gameState.state === 'finished') {
+      return (
+        <>
+          {dailyDoubleAudio}
+          <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center p-4">
+            <div className="max-w-md mx-auto text-center">
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold p-8">
+                <h1 className="text-4xl font-bold text-jeopardy-gold mb-4 tracking-wide font-sans uppercase">
+                  Game Finished
+                </h1>
+                <p className="text-slate-600 dark:text-slate-400 text-lg mb-6">
+                  Thanks for playing!
+                </p>
+                <Link
+                  href="/"
+                  className="inline-block bg-jeopardy-blue hover:bg-jeopardy-blue-light text-jeopardy-gold font-bold py-3 px-8 rounded-lg transition-colors uppercase tracking-wide"
+                >
+                  Go Home
+                </Link>
+              </div>
+            </div>
+          </div>
+        </>
+      );
+    }
+  }
+
+  // HOST VIEWS (user is the host)
+  // Waiting screen (for host to wait for teams to join)
+  if (gameState && gameState.state === 'setup') {
+    return (
+      <>
+        {dailyDoubleAudio}
+        <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark py-12 px-4">
+          <div className="max-w-2xl mx-auto">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold p-8">
+              <h1 className="text-4xl font-bold text-jeopardy-gold mb-2 tracking-wide font-sans text-center uppercase">
+                WAITING FOR TEAMS
+              </h1>
+              
+              {/* Join Code */}
+              <div className="mb-8 text-center">
+                <p className="text-slate-600 dark:text-slate-400 mb-4 uppercase text-lg">
+                  Share this code with teams:
+                </p>
+                <div className="bg-jeopardy-blue border-4 border-jeopardy-royal rounded-xl p-6 inline-block">
+                  <div className="text-6xl font-bold text-jeopardy-gold tracking-widest font-mono">
+                    {gameState.joinCode || 'Loading...'}
+                  </div>
+                </div>
+              </div>
+
+              {/* Teams List */}
+              <div className="mb-8">
+                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-4 text-center uppercase">
+                  Teams Joined ({gameState.teams.length})
+                </h2>
+                {gameState.teams.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 dark:text-slate-400">
+                    <p className="text-lg">No teams have joined yet...</p>
+                    <p className="text-sm mt-2">Teams will appear here as they join</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {gameState.teams.map((team, index) => (
+                      <div
+                        key={team.id}
+                        className="bg-jeopardy-blue/10 dark:bg-jeopardy-blue/20 border-2 border-jeopardy-blue rounded-lg p-4"
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="text-xl font-bold text-jeopardy-royal dark:text-jeopardy-gold">
+                            {team.name}
+                          </div>
+                          <div className="text-sm text-slate-600 dark:text-slate-400">
+                            Team #{index + 1}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Start Game button */}
+              <div className="flex gap-4">
+                <Link
+                  href="/games"
+                  className="flex-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-bold py-3 px-6 rounded-lg transition-colors text-center uppercase tracking-wide"
+                >
+                  Cancel
+                </Link>
+                <button
+                  onClick={handleStartGame}
+                  disabled={gameState.teams.length === 0}
+                  className="flex-1 bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Start Game
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </>
     );
   }
@@ -726,10 +1044,10 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
         <div className="text-center">
           <p className="text-jeopardy-magenta text-xl font-bold font-sans mb-4 uppercase">GAME STATE NOT FOUND</p>
           <Link
-            href="/games"
+            href={isHost ? "/games" : "/"}
             className="inline-block bg-jeopardy-blue hover:bg-jeopardy-blue-light text-jeopardy-gold font-bold py-3 px-8 rounded-lg transition-colors uppercase tracking-wide"
           >
-            Back to Games
+            {isHost ? "Back to Games" : "Go Home"}
           </Link>
         </div>
       </div>
@@ -737,7 +1055,8 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
   }
 
   const currentRound = rounds[gameState.currentRoundIndex];
-  const currentTeam = gameState.teams[gameState.currentTeamIndex];
+  const pickerTeamIndex = gameState.questionPickerTeamIndex ?? gameState.currentTeamIndex;
+  const controllingTeam = gameState.teams[pickerTeamIndex];
 
   return (
     <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark relative">
@@ -866,7 +1185,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
             </div>
             <div className="absolute left-1/2 -translate-x-1/2 text-center">
               <p className={`${getHeaderColors().text} text-3xl md:text-4xl lg:text-5xl font-bold font-sans uppercase tracking-wide`} style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
-                {currentTeam.name.toUpperCase()}&apos;S TURN
+                {controllingTeam?.name.toUpperCase()}&apos;S TURN
               </p>
             </div>
             <div className="flex-1 flex justify-end">
@@ -875,11 +1194,12 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                 <div className="flex gap-2">
                   {gameState.teams.map((team, index) => {
                     const headerColors = getHeaderColors();
+                    const isControllingTeam = index === pickerTeamIndex;
                     return (
                       <div
                         key={team.id}
                         className={`px-4 py-2 rounded-lg font-bold text-center ${
-                          index === gameState.currentTeamIndex
+                          isControllingTeam
                             ? `${headerColors.accent} ${headerColors.text === 'text-jeopardy-royal' ? 'text-white' : headerColors.text} border-2 ${headerColors.border}`
                             : `${headerColors.bg} ${headerColors.text}`
                         }`}
@@ -1154,16 +1474,22 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
             {!showAnswer ? (
               /* Question Display */
               <div className="w-full h-full flex flex-col items-center justify-center gap-4 md:gap-6 relative">
-                {!isStealMode && (
-                  <p className="text-white/60 text-xl md:text-xl font-sans uppercase tracking-wide absolute top-8">
-                    {gameState.teams[gameState.currentTeamIndex].name.toUpperCase()}
-                  </p>
-                )}
-                {isStealMode && (
-                  <p className="text-white/60 text-xl md:text-xl font-sans uppercase tracking-wide absolute top-8">
-                    STEAL ATTEMPT: {gameState.teams[gameState.currentTeamIndex].name.toUpperCase()}
-                  </p>
-                )}
+                {/* Show buzz-in status prominently at the top */}
+                <div className="absolute top-8 text-center w-full px-4">
+                  {gameState.buzzedTeamId ? (
+                    <div className="text-yellow-300 text-3xl md:text-4xl font-bold font-sans uppercase tracking-wide" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
+                      {gameState.teams.find(t => t.id === gameState.buzzedTeamId)?.name.toUpperCase()} BUZZED IN!
+                    </div>
+                  ) : isStealMode ? (
+                    <div className="text-yellow-300 text-4xl md:text-5xl font-bold font-sans uppercase tracking-wide animate-pulse" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
+                      BUZZ IN TO STEAL!
+                    </div>
+                  ) : (
+                    <div className="text-yellow-300 text-4xl md:text-5xl font-bold font-sans uppercase tracking-wide animate-pulse" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
+                      BUZZ IN!
+                    </div>
+                  )}
+                </div>
                 <div className="flex-1 flex flex-col items-center justify-center gap-4 md:gap-6">
               {selectedQuestion.question.text && (
                     <p className="text-white text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-sans font-bold leading-tight px-4 uppercase" style={{ textShadow: '4px 4px 8px rgba(0,0,0,0.5)' }}>
@@ -1223,13 +1549,9 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     </div>
   );
 }
-//hi
 
 export default function GamePlayPage({ params }: { params: Promise<{ id: string }> }) {
-  return (
-    <ProtectedRoute>
-      <GamePlayPageContent params={params} />
-    </ProtectedRoute>
-  );
+  // Game play page doesn't require authentication - clients can join without logging in
+  return <GamePlayPageContent params={params} />;
 }
 

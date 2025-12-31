@@ -92,6 +92,7 @@ export interface CreateGameStateRequest {
   gameId: string;
   teams?: Team[];
   currentTeamIndex?: number;
+  questionPickerTeamIndex?: number;
   currentRoundIndex?: number;
   completedQuestionIds?: string[];
 }
