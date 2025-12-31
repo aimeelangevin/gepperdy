@@ -796,81 +796,87 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       return (
         <>
           {dailyDoubleAudio}
-          <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center p-4">
-            <div className="max-w-md mx-auto text-center">
-              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold p-8">
-                {gameState.state === 'active' ? (
-                  <>
-                    <h1 className="text-3xl font-bold text-jeopardy-gold mb-8 tracking-wide font-sans uppercase">
-                      Waiting for Question
-                    </h1>
-                    <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-jeopardy-royal mx-auto"></div>
-                  </>
-                ) : canBuzzIn ? (
-                  <>
-                    <h1 className="text-3xl font-bold text-jeopardy-gold mb-8 tracking-wide font-sans uppercase">
-                      Ready to Buzz In
-                    </h1>
-                    <button
-                      className="w-full h-64 bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold text-6xl rounded-xl transition-all shadow-lg uppercase tracking-wide border-4 border-jeopardy-gold hover:border-jeopardy-gold-light active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                      onClick={async () => {
-                        if (!teamId || !gameState || !canBuzzIn || isBuzzingIn) return;
-                        
-                        setIsBuzzingIn(true); // Prevent multiple simultaneous calls
-                        
-                        // Optimistic update: immediately update local state for instant feedback
-                        setGameState({
-                          ...gameState,
-                          buzzedTeamId: teamId,
-                          state: 'answering',
-                        });
-                        
-                        try {
-                          const response = await gameStateApi.buzzIn(gameState._id.toString(), teamId);
-                          // Update with server response if successful
-                          if (response.success && response.data) {
-                            setGameState(response.data);
-                          }
-                          // Allow a brief delay before re-enabling to prevent rapid clicks
-                          setTimeout(() => setIsBuzzingIn(false), 500);
-                        } catch (err) {
-                          console.error('Failed to buzz in:', err);
-                          // Revert optimistic update on error
-                          setGameState({
-                            ...gameState,
-                            buzzedTeamId: null,
-                            state: 'question_active',
-                          });
-                          setIsBuzzingIn(false);
-                        }
-                      }}
-                      disabled={!canBuzzIn || !teamId || isBuzzingIn}
-                    >
-                      BUZZ IN
-                    </button>
-                  </>
-                ) : hasBuzzedIn ? (
-                  <>
-                    <h1 className="text-4xl font-bold text-jeopardy-gold mb-4 tracking-wide font-sans uppercase">
-                      You Buzzed In!
-                    </h1>
-                    <p className="text-slate-600 dark:text-slate-400 text-lg">
-                      Waiting for the host...
-                    </p>
-                  </>
-                ) : someoneElseBuzzedIn ? (
-                  <>
-                    <h1 className="text-3xl font-bold text-slate-600 dark:text-slate-400 mb-4 tracking-wide font-sans uppercase">
-                      Someone Else Buzzed In
-                    </h1>
-                    <p className="text-slate-600 dark:text-slate-400 text-lg">
-                      Wait for the next question...
-                    </p>
-                  </>
-                ) : null}
+          {canBuzzIn ? (
+            <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex flex-col items-center justify-center p-4">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-jeopardy-royal mb-8 tracking-wide font-sans uppercase">
+                BUZZ IN!
+              </h1>
+              <button
+                className="flex items-center justify-center transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                onClick={async () => {
+                  if (!teamId || !gameState || !canBuzzIn || isBuzzingIn) return;
+                  
+                  setIsBuzzingIn(true); // Prevent multiple simultaneous calls
+                  
+                  // Optimistic update: immediately update local state for instant feedback
+                  setGameState({
+                    ...gameState,
+                    buzzedTeamId: teamId,
+                    state: 'answering',
+                  });
+                  
+                  try {
+                    const response = await gameStateApi.buzzIn(gameState._id.toString(), teamId);
+                    // Update with server response if successful
+                    if (response.success && response.data) {
+                      setGameState(response.data);
+                    }
+                    // Allow a brief delay before re-enabling to prevent rapid clicks
+                    setTimeout(() => setIsBuzzingIn(false), 500);
+                  } catch (err) {
+                    console.error('Failed to buzz in:', err);
+                    // Revert optimistic update on error
+                    setGameState({
+                      ...gameState,
+                      buzzedTeamId: null,
+                      state: 'question_active',
+                    });
+                    setIsBuzzingIn(false);
+                  }
+                }}
+                disabled={!canBuzzIn || !teamId || isBuzzingIn}
+              >
+                  <img 
+                    src="/buzzer.png" 
+                    alt="Buzz In" 
+                    className="w-[95vw] max-w-4xl h-auto object-contain hover:brightness-110 active:brightness-90 transition-all"
+                  />
+              </button>
+            </div>
+          ) : (
+            <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center p-4">
+              <div className="max-w-md mx-auto text-center">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold p-8">
+                  {gameState.state === 'active' ? (
+                    <>
+                      <h1 className="text-3xl font-bold text-jeopardy-gold mb-8 tracking-wide font-sans uppercase">
+                        Waiting for Question
+                      </h1>
+                      <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-jeopardy-royal mx-auto"></div>
+                    </>
+                  ) : hasBuzzedIn ? (
+                    <>
+                      <h1 className="text-4xl font-bold text-jeopardy-gold mb-4 tracking-wide font-sans uppercase">
+                        You Buzzed In!
+                      </h1>
+                      <p className="text-slate-600 dark:text-slate-400 text-lg">
+                        Waiting for the host...
+                      </p>
+                    </>
+                  ) : someoneElseBuzzedIn ? (
+                    <>
+                      <h1 className="text-3xl font-bold text-slate-600 dark:text-slate-400 mb-4 tracking-wide font-sans uppercase">
+                        Someone Else Buzzed In
+                      </h1>
+                      <p className="text-slate-600 dark:text-slate-400 text-lg">
+                        Wait for the next question...
+                      </p>
+                    </>
+                  ) : null}
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </>
       );
     }
@@ -1481,11 +1487,11 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                       {gameState.teams.find(t => t.id === gameState.buzzedTeamId)?.name.toUpperCase()} BUZZED IN!
                     </div>
                   ) : isStealMode ? (
-                    <div className="text-yellow-300 text-4xl md:text-5xl font-bold font-sans uppercase tracking-wide animate-pulse" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
+                    <div className="text-jeopardy-royal text-4xl md:text-5xl font-bold font-sans uppercase tracking-wide animate-pulse" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
                       BUZZ IN TO STEAL!
                     </div>
                   ) : (
-                    <div className="text-yellow-300 text-4xl md:text-5xl font-bold font-sans uppercase tracking-wide animate-pulse" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
+                    <div className="text-jeopardy-royal text-4xl md:text-5xl font-bold font-sans uppercase tracking-wide animate-pulse" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
                       BUZZ IN!
                     </div>
                   )}
