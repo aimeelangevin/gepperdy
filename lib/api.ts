@@ -179,6 +179,18 @@ export const gameStateApi = {
     apiFetch<GameState>(`/api/game-states/${id}`, {
       method: "DELETE",
     }),
+
+  join: (joinCode: string, teamName: string) =>
+    apiFetch<GameState>("/api/game-states/join", {
+      method: "POST",
+      body: JSON.stringify({ joinCode: joinCode.toUpperCase(), teamName }),
+    }),
+
+  buzzIn: (gameStateId: string, teamId: string) =>
+    apiFetch<GameState>(`/api/game-states/${gameStateId}/buzz`, {
+      method: "POST",
+      body: JSON.stringify({ teamId }),
+    }),
 };
 
 // Question API functions
