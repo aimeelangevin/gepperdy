@@ -426,7 +426,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       const response = await gameStateApi.update(gameState._id.toString(), {
         ...updates,
         teams: updates.teams ? (updates.teams as Team[]) : undefined,
-      });
+      } as any);
       if (response.success && response.data) {
         const updatedState = response.data;
         setGameState(updatedState);
