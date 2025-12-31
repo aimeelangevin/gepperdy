@@ -19,7 +19,7 @@ const libreBaskerville = Libre_Baskerville({
 });
 
 export const metadata: Metadata = {
-  title: "Jeopardy",
+  title: "Gepperdy!",
   description: "Made with love by Aimee and Matt",
 };
 

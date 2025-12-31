@@ -873,24 +873,36 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
               <div className="flex items-center gap-4">
                 {/* Team scores */}
                 <div className="flex gap-2">
-                  {gameState.teams.map((team, index) => {
-                    const headerColors = getHeaderColors();
-                    return (
-                      <div
-                        key={team.id}
-                        className={`px-4 py-2 rounded-lg font-bold text-center ${
-                          index === gameState.currentTeamIndex
-                            ? `${headerColors.accent} ${headerColors.text === 'text-jeopardy-royal' ? 'text-white' : headerColors.text} border-2 ${headerColors.border}`
-                            : `${headerColors.bg} ${headerColors.text}`
-                        }`}
-                      >
-                        <div className="text-xs uppercase tracking-wide text-center">{team.name.toUpperCase()}</div>
-                        <div className={`text-xl text-center ${team.score < 0 ? 'text-red-500' : ''}`}>
-                          {team.score < 0 ? '-' : ''}${Math.abs(team.score)}
-                        </div>
+                {gameState.teams.map((team, index) => {
+                  const headerColors = getHeaderColors();
+                  const isCurrentTeam = index === gameState.currentTeamIndex;
+                  
+                  // Determine text color for current team - blue if background is gold/yellow
+                  let currentTeamTextColor = 'text-white';
+                  if (isCurrentTeam && headerColors.accent === 'bg-jeopardy-gold') {
+                    currentTeamTextColor = 'text-jeopardy-blue';
+                  } else if (isCurrentTeam && headerColors.text === 'text-jeopardy-royal') {
+                    currentTeamTextColor = 'text-white';
+                  } else if (isCurrentTeam) {
+                    currentTeamTextColor = 'text-white';
+                  }
+                  
+                  return (
+                    <div
+                      key={team.id}
+                      className={`px-4 py-2 rounded-lg font-bold text-center ${
+                        isCurrentTeam
+                          ? `${headerColors.accent} ${currentTeamTextColor} border-2 ${headerColors.border}`
+                          : `${headerColors.bg} ${headerColors.text}`
+                      }`}
+                    >
+                      <div className="text-xs uppercase tracking-wide text-center">{team.name.toUpperCase()}</div>
+                      <div className={`text-xl text-center ${team.score < 0 ? 'text-red-500' : ''} ${isCurrentTeam ? currentTeamTextColor : ''}`}>
+                        {team.score < 0 ? '-' : ''}${Math.abs(team.score)}
                       </div>
-                    );
-                  })}
+                    </div>
+                  );
+                })}
                 </div>
                 <button
                   onClick={async () => {
@@ -1148,7 +1160,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       {selectedQuestion && gameState && (
         <div 
           key={`question-${selectedQuestion.question._id}-${selectedQuestion.catIndex}-${selectedQuestion.qIndex}`}
-          className="fixed inset-0 bg-jeopardy-blue flex items-center justify-center z-50 spin-in"
+          className="fixed inset-0 bg-jeopardy-blue flex items-center justify-center z-50 zoom-in"
         >
           <div className="w-full h-full flex flex-col items-center justify-center p-8 md:p-12 text-center overflow-hidden relative">
             {!showAnswer ? (
