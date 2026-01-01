@@ -25,6 +25,7 @@ const GameStateSchema = new Schema(
         "question_active",
         "answering",
         "showing_answer",
+        "final_jeopardy",
         "finished",
       ],
       default: "setup",
@@ -35,6 +36,11 @@ const GameStateSchema = new Schema(
     currentRoundIndex: { type: Number, default: 0 },
     completedQuestionIds: { type: [String], default: [] },
     buzzedTeamId: { type: String, default: null }, // Track which team buzzed in
+    finalJeopardyAnswers: {
+      type: Map,
+      of: String, // Maps teamId -> imageUrl
+      default: {},
+    },
   },
   {
     timestamps: true,

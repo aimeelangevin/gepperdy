@@ -45,16 +45,17 @@ export async function PUT(
     await connectDB();
     const { id } = await params;
     const body: UpdateGameStateRequest = await request.json();
-    const {
-      gameId,
-      state,
-      teams,
-      currentTeamIndex,
-      questionPickerTeamIndex,
-      currentRoundIndex,
-      completedQuestionIds,
-      buzzedTeamId,
-    } = body;
+           const {
+             gameId,
+             state,
+             teams,
+             currentTeamIndex,
+             questionPickerTeamIndex,
+             currentRoundIndex,
+             completedQuestionIds,
+             buzzedTeamId,
+             finalJeopardyAnswers,
+           } = body;
 
     // Validate that all teams have IDs if teams are being updated
     if (teams !== undefined && teams.length > 0) {
@@ -67,22 +68,23 @@ export async function PUT(
       }
     }
 
-    const gameState = await GameStateModel.findByIdAndUpdate(
-      id,
-      {
-        ...(gameId !== undefined && { gameId }),
-        ...(state !== undefined && { state }),
-        ...(teams !== undefined && { teams }),
-        ...(currentTeamIndex !== undefined && { currentTeamIndex }),
-        ...(questionPickerTeamIndex !== undefined && {
-          questionPickerTeamIndex,
-        }),
-        ...(currentRoundIndex !== undefined && { currentRoundIndex }),
-        ...(completedQuestionIds !== undefined && { completedQuestionIds }),
-        ...(buzzedTeamId !== undefined && { buzzedTeamId }),
-      },
-      { new: true, runValidators: true }
-    ).lean();
+           const gameState = await GameStateModel.findByIdAndUpdate(
+             id,
+             {
+               ...(gameId !== undefined && { gameId }),
+               ...(state !== undefined && { state }),
+               ...(teams !== undefined && { teams }),
+               ...(currentTeamIndex !== undefined && { currentTeamIndex }),
+               ...(questionPickerTeamIndex !== undefined && {
+                 questionPickerTeamIndex,
+               }),
+               ...(currentRoundIndex !== undefined && { currentRoundIndex }),
+               ...(completedQuestionIds !== undefined && { completedQuestionIds }),
+               ...(buzzedTeamId !== undefined && { buzzedTeamId }),
+               ...(finalJeopardyAnswers !== undefined && { finalJeopardyAnswers }),
+             },
+             { new: true, runValidators: true }
+           ).lean();
 
     if (!gameState) {
       return NextResponse.json(

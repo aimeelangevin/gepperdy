@@ -103,12 +103,27 @@ export async function POST(request: Request) {
       roundIds.push(round._id.toString());
     }
 
+    // Create Final Jeopardy category with 1 question
+    const finalQuestion = await QuestionModel.create({
+      text: "",
+      answer: "",
+      isDailyDouble: false,
+      points: 0, // Final Jeopardy doesn't use points in the traditional way
+    });
+
+    const finalCategory = await CategoryModel.create({
+      name: "Final Jeopardy",
+      questionIds: [finalQuestion._id.toString()],
+    });
+    const finalCategoryId = finalCategory._id.toString();
+
     // Create the game
     const newGame = await GameModel.create({
       userId,
       name,
       theme,
       roundIds,
+      finalCategoryId,
     });
 
     return NextResponse.json(

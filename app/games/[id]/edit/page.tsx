@@ -22,8 +22,10 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [rounds, setRounds] = useState<ExtendedRound[]>([]);
+  const [finalCategory, setFinalCategory] = useState<Category & { questions: Question[] } | null>(null);
   const [currentRoundIndex, setCurrentRoundIndex] = useState(0);
   const [editingCell, setEditingCell] = useState<{ catIndex: number; qIndex: number } | null>(null);
+  const [editingFinalQuestion, setEditingFinalQuestion] = useState(false);
   const [editingCategory, setEditingCategory] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const saveTimeoutRef = useRef<{ [key: string]: NodeJS.Timeout }>({});
@@ -155,6 +157,24 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
             });
             
             setRounds(extendedRounds);
+          }
+
+          // Fetch Final Jeopardy category if it exists
+          if (response.data.finalCategoryId) {
+            const finalCatResponse = await categoryApi.getById(response.data.finalCategoryId.toString());
+            if (finalCatResponse.success && finalCatResponse.data) {
+              const finalCat = finalCatResponse.data;
+              // Fetch the question for final jeopardy
+              if (finalCat.questionIds && finalCat.questionIds.length > 0) {
+                const finalQuestionResponse = await questionApi.getById(finalCat.questionIds[0].toString());
+                if (finalQuestionResponse.success && finalQuestionResponse.data) {
+                  setFinalCategory({
+                    ...finalCat,
+                    questions: [finalQuestionResponse.data],
+                  });
+                }
+              }
+            }
           }
         } else {
           setError(response.error || 'Failed to load game');
@@ -294,6 +314,29 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
     }, 500);
   };
 
+  const updateFinalCategoryName = (newName: string) => {
+    if (!finalCategory) return;
+    setFinalCategory({ ...finalCategory, name: newName });
+    
+    const categoryId = finalCategory._id.toString();
+    const key = `final-category-${categoryId}`;
+    
+    if (saveTimeoutRef.current[key]) {
+      clearTimeout(saveTimeoutRef.current[key]);
+    }
+    
+    saveTimeoutRef.current[key] = setTimeout(async () => {
+      setSaving(true);
+      try {
+        await categoryApi.update(categoryId, { name: newName });
+      } catch (err) {
+        console.error('Failed to save final category name:', err);
+      } finally {
+        setSaving(false);
+      }
+    }, 500);
+  };
+
   const updateQuestion = (catIndex: number, qIndex: number, updates: Partial<Question>) => {
     const newRounds = [...rounds];
     newRounds[currentRoundIndex].categories[catIndex].questions[qIndex] = {
@@ -302,29 +345,43 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
     };
     setRounds(newRounds);
     
-    // Autosave with debounce
     const questionId = newRounds[currentRoundIndex].categories[catIndex].questions[qIndex]._id.toString();
     const key = `question-${questionId}`;
     
-    // Clear existing timeout for this question
     if (saveTimeoutRef.current[key]) {
       clearTimeout(saveTimeoutRef.current[key]);
     }
     
-    // Set new timeout to save after 500ms of no typing
     saveTimeoutRef.current[key] = setTimeout(async () => {
       setSaving(true);
       try {
-        const question = newRounds[currentRoundIndex].categories[catIndex].questions[qIndex];
-        await questionApi.update(questionId, {
-          text: question.text,
-          answer: question.answer,
-          imageUrl: question.imageUrl,
-          audioUrl: question.audioUrl,
-          isDailyDouble: question.isDailyDouble,
-        });
+        await questionApi.update(questionId, updates);
       } catch (err) {
         console.error('Failed to save question:', err);
+      } finally {
+        setSaving(false);
+      }
+    }, 500);
+  };
+
+  const updateFinalQuestion = (updates: Partial<Question>) => {
+    if (!finalCategory || !finalCategory.questions[0]) return;
+    const updatedQuestion = { ...finalCategory.questions[0], ...updates };
+    setFinalCategory({ ...finalCategory, questions: [updatedQuestion] });
+    
+    const questionId = updatedQuestion._id.toString();
+    const key = `final-question-${questionId}`;
+    
+    if (saveTimeoutRef.current[key]) {
+      clearTimeout(saveTimeoutRef.current[key]);
+    }
+    
+    saveTimeoutRef.current[key] = setTimeout(async () => {
+      setSaving(true);
+      try {
+        await questionApi.update(questionId, updates);
+      } catch (err) {
+        console.error('Failed to save final question:', err);
       } finally {
         setSaving(false);
       }
@@ -339,8 +396,6 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
     setEditingCell(null);
   };
 
-
-  // Loading state
   if (loading) {
     return (
       <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center">
@@ -352,65 +407,58 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
     );
   }
 
-  // Error state
-  if (error || !game) {
+  if (error) {
     return (
-      <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center p-4">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold p-8 max-w-md text-center">
-          <div className="text-6xl mb-4">⚠️</div>
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-4 font-jeopardy">
-            Error Loading Game
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400 mb-6">{error || 'Game not found'}</p>
+      <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-jeopardy-magenta text-xl font-bold font-jeopardy mb-4">{error}</p>
           <Link
             href="/games"
-            className="inline-block bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-3 px-8 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold"
+            className="inline-block bg-jeopardy-blue hover:bg-jeopardy-blue-light text-jeopardy-gold font-bold py-3 px-8 rounded-lg transition-colors uppercase tracking-wide"
           >
-            ← Back to Games
+            Back to all games
           </Link>
         </div>
       </div>
     );
   }
 
+  if (!game) {
+    return null;
+  }
+
   return (
-    <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark relative">
-      {/* Header */}
-      <div className="bg-jeopardy-royal border-b-4 border-jeopardy-gold py-6 relative z-20">
-        <div className="container mx-auto px-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-4xl font-bold text-jeopardy-gold mb-1 tracking-wide font-jeopardy" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
-                {game.name}
-              </h1>
-            </div>
-            <div className="flex gap-3 items-center">
-              {saving && (
-                <div className="flex items-center gap-2 text-jeopardy-gold">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-jeopardy-gold"></div>
-                  <span className="text-sm font-semibold">Saving...</span>
-                </div>
-              )}
-              {!saving && (
-                <div className="flex items-center gap-2 text-jeopardy-gold">
-                  <span className="text-sm font-semibold">✓ All changes saved</span>
-                </div>
-              )}
-              <Link
-                href="/games"
-                className="flex items-center bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold"
-              >
-                Back to all games
-              </Link>
-              <button
-                onClick={handleLogout}
-                className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-lg uppercase tracking-wide text-sm border-2 border-jeopardy-gold/50 hover:border-jeopardy-gold"
-              >
-                Logout
-              </button>
+    <ProtectedRoute>
+      <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark">
+        {/* Header */}
+        <div className="bg-jeopardy-blue border-b-4 border-jeopardy-gold sticky top-0 z-40">
+          <div className="container mx-auto px-4 py-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-3xl font-bold text-jeopardy-gold font-jeopardy uppercase tracking-wide">
+                  {game.name}
+                </h1>
+                <p className="text-jeopardy-gold/80 text-sm mt-1">
+                  Edit Game
+                </p>
+              </div>
+              <div className="flex gap-4">
+                <Link
+                  href="/games"
+                  className="flex items-center bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold"
+                >
+                  Back to all games
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-lg uppercase tracking-wide text-sm border-2 border-jeopardy-gold/50 hover:border-jeopardy-gold"
+                >
+                  Logout
+                </button>
             </div>
           </div>
         </div>
+      </div>
       </div>
 
       {/* Round Selector */}
@@ -523,6 +571,53 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
           Click on category names to edit them. Click on any cell to add/edit questions.
         </div>
       </div>
+
+      {/* Final Jeopardy Section */}
+      {finalCategory && (
+        <div className="container mx-auto px-4 py-8">
+          <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 ${
+            game?.theme === Theme.Christmas ? 'border-red-600' : 
+            game?.theme === Theme.Fall ? 'border-amber-800' : 
+            game?.theme === Theme.Birthday ? 'border-sky-500' :
+            'border-jeopardy-gold'
+          } p-6`}>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-2xl font-bold text-jeopardy-royal dark:text-jeopardy-gold uppercase tracking-wide">
+                Final Jeopardy
+              </h2>
+              {finalCategory.questions[0] && (
+                <button
+                  onClick={() => setEditingFinalQuestion(true)}
+                  className="bg-jeopardy-blue hover:bg-jeopardy-blue-light text-jeopardy-gold font-bold py-2 px-6 rounded-lg transition-colors uppercase tracking-wide border-2 border-jeopardy-gold"
+                >
+                  Edit Question
+                </button>
+              )}
+            </div>
+            
+            {finalCategory.questions[0] && (
+              <div className="mt-4">
+                <div className="mb-4">
+                  <label className="block text-sm font-bold text-slate-700 dark:text-slate-300 mb-2 uppercase">
+                    Category Name
+                  </label>
+                  <input
+                    type="text"
+                    value={finalCategory.name}
+                    onChange={(e) => updateFinalCategoryName(e.target.value)}
+                    className="w-full px-4 py-2 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                    placeholder="Final Jeopardy Category"
+                  />
+                </div>
+                <div className="text-slate-600 dark:text-slate-400">
+                  <p><strong>Question:</strong> {finalCategory.questions[0].text || '(Not set)'}</p>
+                  <p className="mt-2"><strong>Answer:</strong> {finalCategory.questions[0].answer || '(Not set)'}</p>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Question Editor Modal */}
       {editingCell && (
@@ -699,7 +794,7 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
               <div className="flex gap-4 pt-4 border-t-2 border-slate-200 dark:border-slate-700">
                 <button
                   onClick={closeCellEditor}
-                  className="flex-1 bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-3 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold"
+                  className="flex-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-bold py-3 px-6 rounded-lg transition-colors uppercase tracking-wide"
                 >
                   Done
                 </button>
@@ -709,15 +804,179 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
         </div>
       )}
 
+      {/* Final Jeopardy Question Editor Modal */}
+      {editingFinalQuestion && finalCategory && finalCategory.questions[0] && (
+        <div 
+          className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+          onClick={() => setEditingFinalQuestion(false)}
+        >
+          <div 
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold max-w-2xl w-full max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="bg-jeopardy-royal p-6 border-b-4 border-jeopardy-gold relative">
+              <h2 className="text-2xl font-bold text-jeopardy-gold font-jeopardy pr-8">
+                Final Jeopardy - {finalCategory.name}
+              </h2>
+              <button
+                onClick={() => setEditingFinalQuestion(false)}
+                className="absolute top-5 right-8 text-jeopardy-gold hover:text-jeopardy-gold-light text-4xl font-bold transition-colors leading-none"
+                aria-label="Close"
+              >
+                ×
+              </button>
+            </div>
 
-    </div>
+            <div className="p-6 space-y-6">
+              {/* Question Text (Optional) */}
+              <div>
+                <label className="block text-lg font-bold text-slate-900 dark:text-white mb-2 uppercase tracking-wide font-jeopardy">
+                  Question Text <span className="text-sm normal-case text-slate-500">(optional)</span>
+                </label>
+                <textarea
+                  value={finalCategory.questions[0].text || ''}
+                  onChange={(e) => updateFinalQuestion({ text: e.target.value })}
+                  className="w-full px-4 py-3 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-jeopardy-magenta dark:focus:border-jeopardy-gold focus:outline-none transition-colors text-lg min-h-24"
+                  placeholder="Enter the question text (optional)..."
+                />
+              </div>
+
+              {/* Image Upload (Optional) */}
+              <div>
+                <label className="block text-lg font-bold text-slate-900 dark:text-white mb-2 uppercase tracking-wide font-jeopardy">
+                  Image <span className="text-sm normal-case text-slate-500">(optional)</span>
+                </label>
+                <div className="space-y-3">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    disabled={uploadingImage}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        uploadFileToS3(
+                          file,
+                          (imageUrl) => {
+                            updateFinalQuestion({ imageUrl });
+                          },
+                          (error) => {
+                            alert(`Failed to upload image: ${error}`);
+                          },
+                          setUploadingImage
+                        );
+                      }
+                    }}
+                    className="w-full px-4 py-3 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-jeopardy-blue file:text-jeopardy-gold hover:file:bg-jeopardy-blue-light cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  {uploadingImage && (
+                    <div className="text-sm text-jeopardy-blue dark:text-jeopardy-gold">
+                      Uploading image...
+                    </div>
+                  )}
+                  {finalCategory.questions[0].imageUrl && (
+                    <div className="mt-2 relative inline-block">
+                      <img
+                        src={finalCategory.questions[0].imageUrl}
+                        alt="Question preview"
+                        className="max-w-full h-auto rounded-lg border-2 border-jeopardy-gold/30"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => updateFinalQuestion({ imageUrl: undefined })}
+                        className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold text-lg leading-none shadow-lg transition-colors"
+                        aria-label="Remove image"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Audio Upload (Optional) */}
+              <div>
+                <label className="block text-lg font-bold text-slate-900 dark:text-white mb-2 uppercase tracking-wide font-jeopardy">
+                  Audio <span className="text-sm normal-case text-slate-500">(optional)</span>
+                </label>
+                <div className="space-y-3">
+                  <input
+                    type="file"
+                    accept="audio/*"
+                    disabled={uploadingAudio}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) {
+                        uploadFileToS3(
+                          file,
+                          (audioUrl) => {
+                            updateFinalQuestion({ audioUrl });
+                          },
+                          (error) => {
+                            alert(`Failed to upload audio: ${error}`);
+                          },
+                          setUploadingAudio
+                        );
+                      }
+                    }}
+                    className="w-full px-4 py-3 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-jeopardy-blue file:text-jeopardy-gold hover:file:bg-jeopardy-blue-light cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  {uploadingAudio && (
+                    <div className="text-sm text-jeopardy-blue dark:text-jeopardy-gold">
+                      Uploading audio...
+                    </div>
+                  )}
+                  {finalCategory.questions[0].audioUrl && (
+                    <div className="mt-2 relative">
+                      <audio
+                        controls
+                        src={finalCategory.questions[0].audioUrl}
+                        className="w-full"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => updateFinalQuestion({ audioUrl: undefined })}
+                        className="absolute top-2 right-2 bg-red-600 hover:bg-red-700 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold text-lg leading-none shadow-lg transition-colors"
+                        aria-label="Remove audio"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Answer */}
+              <div>
+                <label className="block text-lg font-bold text-slate-900 dark:text-white mb-2 uppercase tracking-wide font-jeopardy">
+                  Answer
+                </label>
+                <input
+                  type="text"
+                  value={finalCategory.questions[0].answer || ''}
+                  onChange={(e) => updateFinalQuestion({ answer: e.target.value })}
+                  className="w-full px-4 py-3 rounded-lg border-2 border-jeopardy-blue/20 dark:border-jeopardy-gold/30 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:border-jeopardy-magenta dark:focus:border-jeopardy-gold focus:outline-none transition-colors text-lg"
+                  placeholder="What is...?"
+                  required
+                />
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex gap-4 pt-4 border-t-2 border-slate-200 dark:border-slate-700">
+                <button
+                  onClick={() => setEditingFinalQuestion(false)}
+                  className="flex-1 bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-bold py-3 px-6 rounded-lg transition-colors uppercase tracking-wide"
+                >
+                  Done
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </ProtectedRoute>
   );
 }
 
 export default function GameEditPage({ params }: { params: Promise<{ id: string }> }) {
-  return (
-    <ProtectedRoute>
-      <GameEditPageContent params={params} />
-    </ProtectedRoute>
-  );
+  return <GameEditPageContent params={params} />;
 }

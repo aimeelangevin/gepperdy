@@ -12,6 +12,7 @@ const GameSchema = new Schema(
       enum: Object.values(Theme),
     },
     roundIds: { type: [String], default: [] },
+    finalCategoryId: { type: String, default: null }, // Reference to the final jeopardy category
   },
   {
     timestamps: true,
