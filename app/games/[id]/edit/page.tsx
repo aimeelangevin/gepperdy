@@ -428,33 +428,156 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
   }
 
   return (
-    <ProtectedRoute>
-      <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark">
-        {/* Header */}
-        <div className="bg-jeopardy-blue border-b-4 border-jeopardy-gold sticky top-0 z-40">
-          <div className="container mx-auto px-4 py-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-3xl font-bold text-jeopardy-gold font-jeopardy uppercase tracking-wide">
-                  {game.name}
-                </h1>
-                <p className="text-jeopardy-gold/80 text-sm mt-1">
-                  Edit Game
-                </p>
-              </div>
-              <div className="flex gap-4">
-                <Link
-                  href="/games"
-                  className="flex items-center bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold"
-                >
-                  Back to all games
-                </Link>
-                <button
-                  onClick={handleLogout}
-                  className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-lg uppercase tracking-wide text-sm border-2 border-jeopardy-gold/50 hover:border-jeopardy-gold"
-                >
-                  Logout
-                </button>
+    <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark relative">
+      {/* Header */}
+      <div className="bg-jeopardy-royal border-b-4 border-jeopardy-gold py-6 relative z-20">
+        <div className="container mx-auto px-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-4xl font-bold text-jeopardy-gold mb-1 tracking-wide font-jeopardy" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
+                {game.name}
+              </h1>
+            </div>
+            <div className="flex gap-3 items-center">
+              {saving && (
+                <div className="flex items-center gap-2 text-jeopardy-gold">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-jeopardy-gold"></div>
+                  <span className="text-sm font-semibold">Saving...</span>
+                </div>
+              )}
+              {!saving && (
+                <div className="flex items-center gap-2 text-jeopardy-gold">
+                  <span className="text-sm font-semibold">✓ All changes saved</span>
+                </div>
+              )}
+              <Link
+                href="/games"
+                className="flex items-center bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold"
+              >
+                Back to all games
+              </Link>
+              <button
+                onClick={() => {
+                  const printWindow = window.open('', '_blank');
+                  if (!printWindow) return;
+                  
+                  const currentRound = rounds[currentRoundIndex];
+                  if (!currentRound) return;
+                  
+                  const html = `
+                    <!DOCTYPE html>
+                    <html>
+                      <head>
+                        <title>${game?.name || 'Game'} - Answers</title>
+                        <style>
+                          @page {
+                            size: letter landscape;
+                            margin: 0.25in;
+                          }
+                          body {
+                            font-family: Arial, sans-serif;
+                            margin: 0;
+                            padding: 0;
+                          }
+                          .print-header {
+                            text-align: center;
+                            margin-bottom: 15px;
+                            border-bottom: 3px solid #000;
+                            padding-bottom: 8px;
+                          }
+                          .print-header h1 {
+                            margin: 0;
+                            font-size: 28px;
+                            font-weight: bold;
+                            text-transform: uppercase;
+                          }
+                          .print-header h2 {
+                            margin: 5px 0 0 0;
+                            font-size: 20px;
+                            font-weight: normal;
+                          }
+                          .answers-grid {
+                            width: 100%;
+                            border-collapse: collapse;
+                            font-size: 12px;
+                            height: calc(100vh - 120px);
+                          }
+                          .answers-grid th {
+                            font-weight: bold;
+                            padding: 12px 6px;
+                            text-align: center;
+                            border: 2px solid #000;
+                            font-size: 14px;
+                            text-transform: uppercase;
+                          }
+                          .answers-grid td {
+                            border: 1px solid #000;
+                            padding: 10px 6px;
+                            text-align: center;
+                            vertical-align: top;
+                            height: 15%;
+                          }
+                          .points-header {
+                            font-weight: bold;
+                            padding: 12px 6px;
+                            text-align: center;
+                            border: 2px solid #000;
+                            font-size: 14px;
+                          }
+                          .answer-cell {
+                            font-size: 12px;
+                            line-height: 1.3;
+                            word-wrap: break-word;
+                          }
+                        </style>
+                      </head>
+                      <body>
+                        <div class="print-header">
+                          <h1>${game?.name || 'Game'} - Answer Key</h1>
+                        </div>
+                        <table class="answers-grid">
+                          <thead>
+                            <tr>
+                              <th class="points-header"></th>
+                              ${currentRound.categories.map((cat: any) => 
+                                `<th>${cat.name || 'Category'}</th>`
+                              ).join('')}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            ${[0, 1, 2, 3, 4].map((qIndex) => `
+                              <tr>
+                                <td class="points-header">$${currentRound.categories[0]?.questions[qIndex]?.points || (qIndex + 1) * (currentRoundIndex === 0 ? 200 : 400)}</td>
+                                ${currentRound.categories.map((category: any) => {
+                                  const question = category.questions[qIndex];
+                                  const answer = question?.answer || '';
+                                  return `<td class="answer-cell">${answer}</td>`;
+                                }).join('')}
+                              </tr>
+                            `).join('')}
+                          </tbody>
+                        </table>
+                      </body>
+                    </html>
+                  `;
+                  
+                  printWindow.document.write(html);
+                  printWindow.document.close();
+                  printWindow.focus();
+                  setTimeout(() => {
+                    printWindow.print();
+                  }, 250);
+                }}
+                className="bg-jeopardy-blue hover:bg-jeopardy-blue-light text-jeopardy-gold font-bold py-2 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold"
+              >
+                Print Answers
+              </button>
+              <button
+                onClick={handleLogout}
+                className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-lg uppercase tracking-wide text-sm border-2 border-jeopardy-gold/50 hover:border-jeopardy-gold"
+              >
+                Logout
+              </button>
             </div>
           </div>
         </div>
