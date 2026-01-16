@@ -76,8 +76,8 @@ export default function HomePage() {
                   href="/games"
                   className="bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-8 px-6 rounded-xl transition-all shadow-lg border-4 border-jeopardy-gold hover:border-jeopardy-gold-light hover:scale-105 text-center"
                 >
-                  <div className="text-2xl mb-2 uppercase tracking-wide">Host Game</div>
-                  <div className="text-sm opacity-90">Create or select a game to host</div>
+                  <div className="text-2xl mb-2 uppercase tracking-wide">Host/Edit Game</div>
+                  <div className="text-sm opacity-90">Create or select a game to edit/host</div>
                 </Link>
               </div>
             </div>

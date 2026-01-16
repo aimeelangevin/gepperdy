@@ -212,6 +212,15 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
         text: 'text-jeopardy-royal',
       };
     }
+    if (game?.theme === Theme.Football) {
+      // Dark green field with white text and white border
+      return {
+        bg: 'bg-green-800',
+        hover: 'hover:bg-green-900',
+        border: 'border-white',
+        text: 'text-white',
+      };
+    }
     // Classic theme (default)
     return {
       bg: 'bg-jeopardy-blue',
@@ -245,6 +254,14 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
         hover: 'hover:bg-sky-500',
         border: 'border-sky-600',
         text: 'text-jeopardy-royal',
+      };
+    }
+    if (game?.theme === Theme.Football) {
+      return {
+        bg: 'bg-amber-900',
+        hover: 'hover:bg-amber-950',
+        border: 'border-white',
+        text: 'text-white',
       };
     }
     return {
@@ -373,32 +390,34 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
     );
   }
 
+  const headerColors = getHeaderColors();
+
   return (
     <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark relative">
       {/* Header */}
-      <div className="bg-jeopardy-royal border-b-4 border-jeopardy-gold py-6 relative z-20">
+      <div className={`${headerColors.bg} border-b-4 ${headerColors.border} py-6 relative z-20`}>
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-4xl font-bold text-jeopardy-gold mb-1 tracking-wide font-jeopardy" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
+              <h1 className={`text-4xl font-bold ${headerColors.text} mb-1 tracking-wide font-jeopardy`} style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
                 {game.name}
               </h1>
             </div>
             <div className="flex gap-3 items-center">
               {saving && (
-                <div className="flex items-center gap-2 text-jeopardy-gold">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-jeopardy-gold"></div>
+                <div className={`flex items-center gap-2 ${headerColors.text}`}>
+                  <div className={`animate-spin rounded-full h-4 w-4 border-b-2 ${headerColors.border.replace('border-', 'border-')}`}></div>
                   <span className="text-sm font-semibold">Saving...</span>
                 </div>
               )}
               {!saving && (
-                <div className="flex items-center gap-2 text-jeopardy-gold">
+                <div className={`flex items-center gap-2 ${headerColors.text}`}>
                   <span className="text-sm font-semibold">✓ All changes saved</span>
                 </div>
               )}
               <Link
                 href="/games"
-                className="flex items-center bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold"
+                className={`flex items-center bg-jeopardy-magenta hover:bg-jeopardy-magenta-dark text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 ${headerColors.border}`}
               >
                 Back to all games
               </Link>
@@ -514,13 +533,13 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
                     printWindow.print();
                   }, 250);
                 }}
-                className="bg-jeopardy-blue hover:bg-jeopardy-blue-light text-jeopardy-gold font-bold py-2 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-jeopardy-gold"
+                className={`bg-jeopardy-blue hover:bg-jeopardy-blue-light ${headerColors.text} font-bold py-2 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 ${headerColors.border}`}
               >
                 Print Answers
               </button>
               <button
                 onClick={handleLogout}
-                className="bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-lg uppercase tracking-wide text-sm border-2 border-jeopardy-gold/50 hover:border-jeopardy-gold"
+                className={`bg-slate-600 hover:bg-slate-700 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-lg uppercase tracking-wide text-sm border-2 ${headerColors.border} opacity-50 hover:opacity-100`}
               >
                 Logout
               </button>
@@ -566,6 +585,7 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
           game?.theme === Theme.Christmas ? 'border-red-600' : 
           game?.theme === Theme.Fall ? 'border-amber-800' : 
           game?.theme === Theme.Birthday ? 'border-sky-500' :
+          game?.theme === Theme.Football ? 'border-white' :
           'border-jeopardy-gold'
         } p-6 overflow-x-auto relative`}>
           

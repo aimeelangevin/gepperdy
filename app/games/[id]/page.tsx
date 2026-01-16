@@ -619,6 +619,15 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
         text: 'text-jeopardy-royal',
       };
     }
+    if (game?.theme === Theme.Football) {
+      // Dark green field with white text and white border
+      return {
+        bg: 'bg-green-800',
+        hover: 'hover:bg-green-900',
+        border: 'border-white',
+        text: 'text-white',
+      };
+    }
     return {
       bg: 'bg-jeopardy-blue',
       hover: 'hover:bg-jeopardy-blue-light',
@@ -653,6 +662,15 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
         border: 'border-sky-600',
         text: 'text-jeopardy-royal',
         accent: 'bg-sky-500',
+      };
+    }
+    if (game?.theme === Theme.Football) {
+      return {
+        bg: 'bg-amber-900',
+        hover: 'hover:bg-amber-950',
+        border: 'border-white',
+        text: 'text-white',
+        accent: 'bg-amber-800',
       };
     }
     return {
@@ -1179,6 +1197,21 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
           </div>
         </>
       )}
+
+      {/* Football Theme Decorations */}
+      {game?.theme === Theme.Football && (
+        <>
+          {/* Player in bottom left */}
+          <div className="fixed bottom-0 left-0 md:left-0 z-30 pointer-events-none">
+            <img src="/player.png" alt="football player" className="w-32 h-32 md:w-48 md:h-48 lg:w-64 lg:h-64 object-contain drop-shadow-lg" />
+          </div>
+          
+          {/* Field goal in bottom right */}
+          <div className="fixed bottom-0 right-0 md:right-0 z-30 pointer-events-none">
+            <img src="/field_goal.png" alt="field goal" className="w-32 h-32 md:w-48 md:h-48 lg:w-64 lg:h-64 object-contain drop-shadow-lg" />
+          </div>
+        </>
+      )}
       
       {/* Header */}
       <div className={`${getHeaderColors().bg} border-b-4 ${getHeaderColors().border} py-4 relative z-20`}>
@@ -1273,6 +1306,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
           game?.theme === Theme.Christmas ? 'border-red-600' : 
           game?.theme === Theme.Fall ? 'border-amber-800' : 
           game?.theme === Theme.Birthday ? 'border-sky-500' :
+          game?.theme === Theme.Football ? 'border-white' :
           'border-jeopardy-gold'
         } p-2 md:p-4 flex-1 flex flex-col overflow-hidden`}>
           

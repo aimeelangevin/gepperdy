@@ -14,6 +14,7 @@ const THEME_ICONS: Record<Theme, string> = {
   [Theme.Christmas]: '🎄',
   [Theme.Fall]: '🍂',
   [Theme.Birthday]: '🎂',
+  [Theme.Football]: '🏈',
 };
 
 

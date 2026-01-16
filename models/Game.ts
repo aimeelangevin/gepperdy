@@ -29,4 +29,3 @@ const GameModel: Model<GameDocument> =
   mongoose.models.Game || mongoose.model<GameDocument>("Game", GameSchema);
 
 export default GameModel;
-

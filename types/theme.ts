@@ -3,4 +3,5 @@ export enum Theme {
   Christmas = "christmas",
   Fall = "fall",
   Birthday = "birthday",
+  Football = "football",
 }

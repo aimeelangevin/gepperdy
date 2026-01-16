@@ -19,17 +19,22 @@ const THEME_INFO = {
   [Theme.Christmas]: {
     icon: '🎄',
     name: 'Christmas',
-    description: 'Festive holiday theme',
+    description: "It's the most wonderful time of the year!",
   },
   [Theme.Fall]: {
     icon: '🍂',
     name: 'Fall',
-    description: 'Autumn vibes',
+    description: 'Cozy vibes',
   },
   [Theme.Birthday]: {
     icon: '🎂',
     name: 'Birthday',
     description: 'Celebration time!',
+  },
+  [Theme.Football]: {
+    icon: '🏈',
+    name: 'Football',
+    description: 'Are you ready for some football?',
   },
 };
 
