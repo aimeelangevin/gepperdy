@@ -11,19 +11,8 @@ import type { GameState, Team } from '@/models/GameState';
 import { Theme } from '@/types/theme';
 import Link from 'next/link';
 import { getUserId } from '@/lib/auth';
-
-// Simple UUID v4 generator for browser
-const generateUUID = (): string => {
-  if (typeof window !== 'undefined' && window.crypto && window.crypto.randomUUID) {
-    return window.crypto.randomUUID();
-  }
-  // Fallback UUID generator
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-};
+import FinalJeopardyDrawing from '@/components/FinalJeopardyDrawing';
+import FinalJeopardyHostView from '@/components/FinalJeopardyHostView';
 
 type ExtendedRound = Round & {
   categories: (Category & { questions: Question[] })[];
@@ -35,6 +24,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
   
   const [game, setGame] = useState<Game | null>(null);
   const [rounds, setRounds] = useState<ExtendedRound[]>([]);
+  const [finalCategory, setFinalCategory] = useState<(Category & { questions: Question[] }) | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -152,6 +142,23 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
         });
       }
       setRounds(roundsData);
+      
+      // Load Final Jeopardy category if it exists
+      if (gameResponse.data.finalCategoryId) {
+        const finalCatResponse = await categoryApi.getById(gameResponse.data.finalCategoryId.toString());
+        if (finalCatResponse.success && finalCatResponse.data) {
+          const finalCat = finalCatResponse.data;
+          if (finalCat.questionIds && finalCat.questionIds.length > 0) {
+            const finalQuestionResponse = await questionApi.getById(finalCat.questionIds[0].toString());
+            if (finalQuestionResponse.success && finalQuestionResponse.data) {
+              setFinalCategory({
+                ...finalCat,
+                questions: [finalQuestionResponse.data],
+              });
+            }
+          }
+        }
+      }
       
       // Log all Daily Double questions
       console.log('=== DAILY DOUBLE QUESTIONS ===');
@@ -419,6 +426,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     completedQuestionIds?: string[];
     currentRoundIndex?: number;
     buzzedTeamId?: string | null;
+    finalJeopardyAnswers?: Map<string, string> | Record<string, string>;
   }) => {
     if (!gameState) return;
 
@@ -444,6 +452,28 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
             // Show summary if round is complete (whether it's the last round or not)
             if (isRoundComplete) {
               setShowRoundSummary(true);
+            }
+
+            // Check if all rounds are complete (final round completed)
+            const isLastRound = updatedState.currentRoundIndex === rounds.length - 1;
+            if (isRoundComplete && isLastRound) {
+              // Check if ALL rounds are complete
+              const allRoundsComplete = rounds.every((round) => {
+                const roundQuestionIds = round.categories.flatMap(cat => 
+                  cat.questions.map(q => q._id.toString())
+                );
+                return roundQuestionIds.length > 0 && 
+                  roundQuestionIds.every(id => updatedState.completedQuestionIds.includes(id));
+              });
+
+              // Automatically transition to Final Jeopardy if all rounds are complete
+              if (allRoundsComplete && updatedState.state !== 'final_jeopardy' && updatedState.state !== 'finished') {
+                // Transition to final jeopardy state
+                await gameStateApi.update(updatedState._id.toString(), {
+                  state: 'final_jeopardy',
+                });
+                // The SSE update will update the local state
+              }
             }
           }
         }
@@ -891,10 +921,10 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                       </p>
                     </>
                   ) : null}
-                </div>
-              </div>
             </div>
-          )}
+          </div>
+        </div>
+      )}
         </>
       );
     }
@@ -932,7 +962,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                 {isMyTurn ? (
                   <>
                     <h1 className="text-4xl font-bold text-jeopardy-gold mb-4 tracking-wide font-sans uppercase">
-                      It's Your Turn!
+                      It&apos;s Your Turn!
                     </h1>
                     <p className="text-slate-600 dark:text-slate-400 text-lg">
                       The host is waiting for your answer...
@@ -951,6 +981,69 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
               </div>
             </div>
           </div>
+        </>
+      );
+    }
+
+    // Client Final Jeopardy view (when state is 'final_jeopardy')
+    if (gameState.state === 'final_jeopardy') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const teamId = urlParams.get('teamId') || localStorage.getItem(`game_${id}_teamId`) || '';
+      
+      // Check if this team has already submitted their answer
+      const finalJeopardyAnswers = gameState.finalJeopardyAnswers
+        ? (gameState.finalJeopardyAnswers instanceof Map
+            ? Array.from(gameState.finalJeopardyAnswers.entries())
+            : Object.entries(gameState.finalJeopardyAnswers))
+        : [];
+      const hasSubmitted = finalJeopardyAnswers.some(([tid]) => tid === teamId);
+      
+      if (!finalCategory || !finalCategory.questions[0]) {
+        return (
+          <>
+            {dailyDoubleAudio}
+            <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center p-4">
+              <div className="max-w-md mx-auto text-center">
+                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold p-8">
+                  <h1 className="text-4xl font-bold text-jeopardy-gold mb-4 tracking-wide font-sans uppercase">
+                    Final Jeopardy
+                  </h1>
+                  <p className="text-slate-600 dark:text-slate-400 text-lg">
+                    Loading question...
+                  </p>
+                </div>
+              </div>
+            </div>
+          </>
+        );
+      }
+
+      return (
+        <>
+          {dailyDoubleAudio}
+          <FinalJeopardyDrawing
+            question={finalCategory.questions[0].text || finalCategory.name || ''}
+            teamId={teamId}
+            gameStateId={gameState._id.toString()}
+            onAnswerSubmitted={async (imageUrl) => {
+              try {
+                const response = await fetch(`/api/game-states/${gameState._id.toString()}/final-jeopardy/submit-answer`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ teamId, imageUrl }),
+                });
+                if (!response.ok) {
+                  throw new Error('Failed to submit answer');
+                }
+                const result = await response.json();
+                if (result.success && result.data) {
+                  setGameState(result.data as GameState);
+                }
+              } catch (err) {
+                console.error('Failed to submit Final Jeopardy answer:', err);
+              }
+            }}
+          />
         </>
       );
     }
@@ -1294,13 +1387,49 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                 >
                   Exit
                 </button>
+                {/* Final Jeopardy Button (for testing) */}
+                {gameState.state !== 'final_jeopardy' && gameState.state !== 'finished' && finalCategory && (
+                  <button
+                    onClick={async () => {
+                      if (gameState) {
+                        await gameStateApi.update(gameState._id.toString(), {
+                          state: 'final_jeopardy',
+                        });
+                      }
+                    }}
+                    className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-yellow-600 text-sm"
+                    title="Test Final Jeopardy (manual activation)"
+                  >
+                    Final Jeopardy
+                  </button>
+                )}
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Game Board */}
+      {/* Host Final Jeopardy View */}
+      {isHost && gameState.state === 'final_jeopardy' && finalCategory && finalCategory.questions[0] && (
+        <>
+          {dailyDoubleAudio}
+          <FinalJeopardyHostView
+            question={finalCategory.questions[0].text || finalCategory.name || ''}
+            answer={finalCategory.questions[0].answer || ''}
+            gameState={gameState}
+            onFinish={async () => {
+              if (gameState) {
+                await gameStateApi.update(gameState._id.toString(), {
+                  state: 'finished',
+                });
+              }
+            }}
+          />
+        </>
+      )}
+
+      {/* Game Board - Hide if Final Jeopardy is active */}
+      {gameState.state !== 'final_jeopardy' && (
       <div className="container mx-auto px-2 md:px-4 py-1 md:py-2 h-[calc(100vh-120px)] flex flex-col relative z-20">
         <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 ${
           game?.theme === Theme.Christmas ? 'border-red-600' : 
@@ -1362,9 +1491,10 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
           </table>
         </div>
       </div>
+      )}
 
-      {/* Round Summary Modal */}
-      {showRoundSummary && gameState && rounds.length > 0 && (
+      {/* Round Summary Modal - Only show if not in Final Jeopardy */}
+      {gameState.state !== 'final_jeopardy' && showRoundSummary && gameState && rounds.length > 0 && (
         <div className="fixed inset-0 bg-jeopardy-blue flex items-center justify-center z-50">
           <div className="w-full h-full flex flex-col items-center justify-center p-8 md:p-12 text-center overflow-hidden relative">
             <div className="max-w-4xl w-full">
@@ -1610,8 +1740,8 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                 </p>
             </div>
             )}
-          </div>
         </div>
+      </div>
       )}
       {dailyDoubleAudio}
     </div>
