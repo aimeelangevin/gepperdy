@@ -86,13 +86,13 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
     const fetchGameData = async () => {
       setLoading(true);
       setError(null);
-      
+
       try {
         // Fetch game
         const response = await gameApi.getById(id);
         if (response.success && response.data) {
           setGame(response.data);
-          
+
           // Fetch all rounds, categories, and questions in parallel
           if (response.data.roundIds && response.data.roundIds.length > 0) {
             // Fetch all rounds in parallel
@@ -103,10 +103,10 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
             const rounds = roundResponses
               .filter((r) => r.success && r.data)
               .map((r) => r.data!);
-            
+
             // Collect all category IDs from all rounds
             const allCategoryIds = rounds.flatMap((round) => round.categoryIds);
-            
+
             // Fetch all categories in parallel
             const categoryPromises = allCategoryIds.map((categoryId) =>
               categoryApi.getById(categoryId.toString())
@@ -115,15 +115,15 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
             const categories = categoryResponses
               .filter((r) => r.success && r.data)
               .map((r) => r.data!);
-            
+
             // Create a map of category ID to category for quick lookup
             const categoryMap = new Map(
               categories.map((cat) => [cat._id.toString(), cat])
             );
-            
+
             // Collect all question IDs from all categories
             const allQuestionIds = categories.flatMap((category) => category.questionIds);
-            
+
             // Fetch all questions in parallel
             const questionPromises = allQuestionIds.map((questionId) =>
               questionApi.getById(questionId.toString())
@@ -132,12 +132,12 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
             const questions = questionResponses
               .filter((r) => r.success && r.data)
               .map((r) => r.data!);
-            
+
             // Create a map of question ID to question for quick lookup
             const questionMap = new Map(
               questions.map((q) => [q._id.toString(), q])
             );
-            
+
             // Build the extended rounds structure
             const extendedRounds: ExtendedRound[] = rounds.map((round) => {
               const roundCategories = round.categoryIds
@@ -149,13 +149,13 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
                     .map((questionId) => questionMap.get(questionId.toString()))
                     .filter((q): q is Question => q !== undefined),
                 }));
-              
+
               return {
                 ...round,
                 categories: roundCategories,
               };
             });
-            
+
             setRounds(extendedRounds);
           }
 
@@ -185,7 +185,7 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
         setLoading(false);
       }
     };
-    
+
     fetchGameData();
   }, [id]);
 
@@ -291,7 +291,7 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
       text: 'text-jeopardy-gold',
     };
   };
-  
+
   // If no rounds are loaded yet, show loading
   if (!currentRound) {
     return (
@@ -308,16 +308,16 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
     const newRounds = [...rounds];
     newRounds[currentRoundIndex].categories[catIndex].name = newName;
     setRounds(newRounds);
-    
+
     // Autosave with debounce
     const categoryId = newRounds[currentRoundIndex].categories[catIndex]._id.toString();
     const key = `category-${categoryId}`;
-    
+
     // Clear existing timeout for this category
     if (saveTimeoutRef.current[key]) {
       clearTimeout(saveTimeoutRef.current[key]);
     }
-    
+
     // Set new timeout to save after 500ms of no typing
     saveTimeoutRef.current[key] = setTimeout(async () => {
       setSaving(true);
@@ -334,14 +334,14 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
   const updateFinalCategoryName = (newName: string) => {
     if (!finalCategory) return;
     setFinalCategory({ ...finalCategory, name: newName });
-    
+
     const categoryId = finalCategory._id.toString();
     const key = `final-category-${categoryId}`;
-    
+
     if (saveTimeoutRef.current[key]) {
       clearTimeout(saveTimeoutRef.current[key]);
     }
-    
+
     saveTimeoutRef.current[key] = setTimeout(async () => {
       setSaving(true);
       try {
@@ -361,14 +361,14 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
       ...updates,
     };
     setRounds(newRounds);
-    
+
     const questionId = newRounds[currentRoundIndex].categories[catIndex].questions[qIndex]._id.toString();
     const key = `question-${questionId}`;
-    
+
     if (saveTimeoutRef.current[key]) {
       clearTimeout(saveTimeoutRef.current[key]);
     }
-    
+
     saveTimeoutRef.current[key] = setTimeout(async () => {
       setSaving(true);
       try {
@@ -385,14 +385,14 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
     if (!finalCategory || !finalCategory.questions[0]) return;
     const updatedQuestion = { ...finalCategory.questions[0], ...updates };
     setFinalCategory({ ...finalCategory, questions: [updatedQuestion] });
-    
+
     const questionId = updatedQuestion._id.toString();
     const key = `final-question-${questionId}`;
-    
+
     if (saveTimeoutRef.current[key]) {
       clearTimeout(saveTimeoutRef.current[key]);
     }
-    
+
     saveTimeoutRef.current[key] = setTimeout(async () => {
       setSaving(true);
       try {
@@ -479,10 +479,10 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
                 onClick={() => {
                   const printWindow = window.open('', '_blank');
                   if (!printWindow) return;
-                  
+
                   const currentRound = rounds[currentRoundIndex];
                   if (!currentRound) return;
-                  
+
                   const html = `
                     <!DOCTYPE html>
                     <html>
@@ -558,9 +558,9 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
                           <thead>
                             <tr>
                               <th class="points-header"></th>
-                              ${currentRound.categories.map((cat: any) => 
-                                `<th>${cat.name || 'Category'}</th>`
-                              ).join('')}
+                              ${currentRound.categories.map((cat: any) =>
+                    `<th>${cat.name || 'Category'}</th>`
+                  ).join('')}
                             </tr>
                           </thead>
                           <tbody>
@@ -568,10 +568,10 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
                               <tr>
                                 <td class="points-header">$${currentRound.categories[0]?.questions[qIndex]?.points || (qIndex + 1) * (currentRoundIndex === 0 ? 200 : 400)}</td>
                                 ${currentRound.categories.map((category: any) => {
-                                  const question = category.questions[qIndex];
-                                  const answer = question?.answer || '';
-                                  return `<td class="answer-cell">${answer}</td>`;
-                                }).join('')}
+                    const question = category.questions[qIndex];
+                    const answer = question?.answer || '';
+                    return `<td class="answer-cell">${answer}</td>`;
+                  }).join('')}
                               </tr>
                             `).join('')}
                           </tbody>
@@ -579,7 +579,7 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
                       </body>
                     </html>
                   `;
-                  
+
                   printWindow.document.write(html);
                   printWindow.document.close();
                   printWindow.focus();
@@ -587,7 +587,7 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
                     printWindow.print();
                   }, 250);
                 }}
-                className={`bg-jeopardy-blue hover:bg-jeopardy-blue-light ${headerColors.text} font-bold py-2 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 ${headerColors.border}`}
+                className={`bg-jeopardy-blue hover:bg-jeopardy-blue-light text-white font-bold py-2 px-6 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 ${headerColors.border}`}
               >
                 Print Answers
               </button>
@@ -609,21 +609,19 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
             <div className="flex gap-4 justify-center">
               <button
                 onClick={() => setCurrentRoundIndex(0)}
-                className={`px-8 py-3 rounded-lg font-bold uppercase tracking-wide transition-all ${
-                  currentRoundIndex === 0
-                    ? 'bg-jeopardy-blue text-jeopardy-gold border-2 border-jeopardy-gold'
-                    : 'bg-slate-200 dark:bg-slate-700 border-2 border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
-                }`}
+                className={`px-8 py-3 rounded-lg font-bold uppercase tracking-wide transition-all ${currentRoundIndex === 0
+                  ? 'bg-jeopardy-blue text-jeopardy-gold border-2 border-jeopardy-gold'
+                  : 'bg-slate-200 dark:bg-slate-700 border-2 border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
+                  }`}
               >
                 Single Jeopardy
               </button>
               <button
                 onClick={() => setCurrentRoundIndex(1)}
-                className={`px-8 py-3 rounded-lg font-bold uppercase tracking-wide transition-all ${
-                  currentRoundIndex === 1
-                    ? 'bg-jeopardy-blue text-jeopardy-gold border-2 border-jeopardy-gold'
-                    : 'bg-slate-200 dark:bg-slate-700 border-2 border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
-                }`}
+                className={`px-8 py-3 rounded-lg font-bold uppercase tracking-wide transition-all ${currentRoundIndex === 1
+                  ? 'bg-jeopardy-blue text-jeopardy-gold border-2 border-jeopardy-gold'
+                  : 'bg-slate-200 dark:bg-slate-700 border-2 border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600'
+                  }`}
               >
                 Double Jeopardy
               </button>
@@ -634,15 +632,14 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
 
       {/* Game Board */}
       <div className="container mx-auto px-4 py-8 relative">
-        
-        <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 ${
-          game?.theme === Theme.Christmas ? 'border-red-600' : 
-          game?.theme === Theme.Fall ? 'border-amber-800' : 
-          game?.theme === Theme.Birthday ? 'border-sky-500' :
-          game?.theme === Theme.Football ? 'border-white' :
-          'border-jeopardy-gold'
-        } p-6 overflow-x-auto relative`}>
-          
+
+        <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 ${game?.theme === Theme.Christmas ? 'border-red-600' :
+          game?.theme === Theme.Fall ? 'border-amber-800' :
+            game?.theme === Theme.Birthday ? 'border-sky-500' :
+              game?.theme === Theme.Football ? 'border-white' :
+                'border-jeopardy-gold'
+          } p-6 overflow-x-auto relative`}>
+
           <table className="w-full border-collapse table-fixed">
             <thead>
               <tr>
@@ -654,23 +651,23 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
                       className={`${headerColors.bg} ${headerColors.text} p-4 border-4 ${headerColors.border} font-jeopardy cursor-pointer ${headerColors.hover} transition-colors w-[20%]`}
                       onClick={() => setEditingCategory(catIndex)}
                     >
-                    {editingCategory === catIndex ? (
-                      <input
-                        type="text"
-                        value={category.name}
-                        onChange={(e) => updateCategoryName(catIndex, e.target.value)}
-                        onBlur={() => setEditingCategory(null)}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') setEditingCategory(null);
-                        }}
-                        autoFocus
-                        className="w-auto max-w-[180px] bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-2 py-1 rounded outline-2 outline-jeopardy-gold outline-offset-0 text-center uppercase font-bold text-sm"
-                      />
-                    ) : (
-                      <div className="text-center uppercase text-lg">
-                        {category.name}
-                      </div>
-                    )}
+                      {editingCategory === catIndex ? (
+                        <input
+                          type="text"
+                          value={category.name}
+                          onChange={(e) => updateCategoryName(catIndex, e.target.value)}
+                          onBlur={() => setEditingCategory(null)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') setEditingCategory(null);
+                          }}
+                          autoFocus
+                          className="w-auto max-w-[180px] bg-white dark:bg-slate-800 text-slate-900 dark:text-white px-2 py-1 rounded outline-2 outline-jeopardy-gold outline-offset-0 text-center uppercase font-bold text-sm"
+                        />
+                      ) : (
+                        <div className="text-center uppercase text-lg">
+                          {category.name}
+                        </div>
+                      )}
                     </th>
                   );
                 })}
@@ -683,13 +680,12 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
                     const question = category.questions[qIndex];
                     const hasContent = question.text || question.answer;
                     const cellColors = getCellColors(catIndex, qIndex);
-                    
+
                     return (
                       <td
                         key={`${category._id}-${qIndex}`}
-                        className={`${cellColors.bg} ${cellColors.hover} border-4 ${cellColors.border} p-8 cursor-pointer transition-colors text-center ${
-                          hasContent ? 'ring-2 ring-jeopardy-magenta ring-inset' : ''
-                        }`}
+                        className={`${cellColors.bg} ${cellColors.hover} border-4 ${cellColors.border} p-8 cursor-pointer transition-colors text-center ${hasContent ? 'ring-2 ring-jeopardy-magenta ring-inset' : ''
+                          }`}
                         onClick={() => openCellEditor(catIndex, qIndex)}
                       >
                         <div className={`${cellColors.text} text-4xl font-bold font-jeopardy`}>
@@ -717,12 +713,11 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
       {/* Final Jeopardy Section */}
       {finalCategory && (
         <div className="container mx-auto px-4 py-8">
-          <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 ${
-            game?.theme === Theme.Christmas ? 'border-red-600' : 
-            game?.theme === Theme.Fall ? 'border-amber-800' : 
-            game?.theme === Theme.Birthday ? 'border-sky-500' :
-            'border-jeopardy-gold'
-          } p-6`}>
+          <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 ${game?.theme === Theme.Christmas ? 'border-red-600' :
+            game?.theme === Theme.Fall ? 'border-amber-800' :
+              game?.theme === Theme.Birthday ? 'border-sky-500' :
+                'border-jeopardy-gold'
+            } p-6`}>
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-2xl font-bold text-jeopardy-royal dark:text-jeopardy-gold uppercase tracking-wide">
                 Final Jeopardy
@@ -736,7 +731,7 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
                 </button>
               )}
             </div>
-            
+
             {finalCategory.questions[0] && (
               <div className="mt-4">
                 <div className="mb-4">
@@ -763,11 +758,11 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
 
       {/* Question Editor Modal */}
       {editingCell && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
           onClick={closeCellEditor}
         >
-          <div 
+          <div
             className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
@@ -948,11 +943,11 @@ function GameEditPageContent({ params }: { params: Promise<{ id: string }> }) {
 
       {/* Final Jeopardy Question Editor Modal */}
       {editingFinalQuestion && finalCategory && finalCategory.questions[0] && (
-        <div 
+        <div
           className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
           onClick={() => setEditingFinalQuestion(false)}
         >
-          <div 
+          <div
             className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold max-w-2xl w-full max-h-[90vh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >

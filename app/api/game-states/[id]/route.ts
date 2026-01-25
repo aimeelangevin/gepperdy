@@ -54,6 +54,7 @@ export async function PUT(
              currentRoundIndex,
              completedQuestionIds,
              buzzedTeamId,
+             failedTeamIds,
              finalJeopardyAnswers,
            } = body;
 
@@ -66,6 +67,16 @@ export async function PUT(
           { status: 400 }
         );
       }
+    }
+
+    // Log failedTeamIds update
+    if (failedTeamIds !== undefined) {
+      console.log('[UPDATE] Updating failedTeamIds:', {
+        gameStateId: id,
+        failedTeamIds,
+        failedCount: failedTeamIds.length,
+        totalTeams: teams?.length || 'not provided'
+      });
     }
 
            const gameState = await GameStateModel.findByIdAndUpdate(
@@ -81,6 +92,7 @@ export async function PUT(
                ...(currentRoundIndex !== undefined && { currentRoundIndex }),
                ...(completedQuestionIds !== undefined && { completedQuestionIds }),
                ...(buzzedTeamId !== undefined && { buzzedTeamId }),
+               ...(failedTeamIds !== undefined && { failedTeamIds }),
                ...(finalJeopardyAnswers !== undefined && { finalJeopardyAnswers }),
              },
              { new: true, runValidators: true }
@@ -91,6 +103,16 @@ export async function PUT(
         { success: false, error: "Game state not found" },
         { status: 404 }
       );
+    }
+
+    // Log what was actually saved
+    if (gameState.failedTeamIds) {
+      console.log('[UPDATE] Saved gameState with failedTeamIds:', {
+        gameStateId: id,
+        failedTeamIds: gameState.failedTeamIds,
+        failedCount: gameState.failedTeamIds.length,
+        totalTeams: gameState.teams.length
+      });
     }
 
     return NextResponse.json({

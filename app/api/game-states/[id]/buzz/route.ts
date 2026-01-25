@@ -59,6 +59,39 @@ export async function POST(
       );
     }
 
+    // Log buzz-in attempt
+    console.log('[BUZZ-IN] Team attempting to buzz:', {
+      teamId,
+      teamName: team.name,
+      currentState: gameState.state,
+      buzzedTeamId: gameState.buzzedTeamId,
+      failedTeamIds: gameState.failedTeamIds || [],
+      totalTeams: gameState.teams.length,
+      failedCount: gameState.failedTeamIds?.length || 0
+    });
+
+    // Check if this team has already tried and failed on this question
+    const failedTeamIds = gameState.failedTeamIds || [];
+    if (failedTeamIds.includes(teamId)) {
+      console.log('[BUZZ-IN] BLOCKED - Team already failed:', {
+        teamId,
+        teamName: team.name,
+        failedTeamIds
+      });
+      return NextResponse.json(
+        {
+          success: false,
+          error: "This team has already tried and failed on this question",
+        },
+        { status: 400 }
+      );
+    }
+
+    console.log('[BUZZ-IN] ALLOWED - Team can buzz in:', {
+      teamId,
+      teamName: team.name
+    });
+
     // Set buzzed team and change state to answering
     gameState.buzzedTeamId = teamId;
     gameState.state = "answering";

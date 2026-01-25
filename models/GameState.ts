@@ -36,6 +36,7 @@ const GameStateSchema = new Schema(
     currentRoundIndex: { type: Number, default: 0 },
     completedQuestionIds: { type: [String], default: [] },
     buzzedTeamId: { type: String, default: null }, // Track which team buzzed in
+    failedTeamIds: { type: [String], default: [] }, // Track teams that have already tried and failed on current question
     finalJeopardyAnswers: {
       type: Map,
       of: String, // Maps teamId -> imageUrl

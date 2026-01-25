@@ -21,23 +21,23 @@ type ExtendedRound = Round & {
 function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const router = useRouter();
-  
+
   const [game, setGame] = useState<Game | null>(null);
   const [rounds, setRounds] = useState<ExtendedRound[]>([]);
   const [finalCategory, setFinalCategory] = useState<(Category & { questions: Question[] }) | null>(null);
   const [gameState, setGameState] = useState<GameState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
+
   // Waiting screen state (for host to wait for teams to join)
   const [waitingForTeams, setWaitingForTeams] = useState(false);
-  
+
   // SSE connection error state
   const [sseError, setSseError] = useState(false);
-  
+
   // Buzz-in processing state (to prevent race conditions)
   const [isBuzzingIn, setIsBuzzingIn] = useState(false);
-  
+
   // Question display state
   const [selectedQuestion, setSelectedQuestion] = useState<{
     catIndex: number;
@@ -50,7 +50,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
   const [isStealMode, setIsStealMode] = useState(false);
   const [originalTeamIndex, setOriginalTeamIndex] = useState<number | null>(null);
   const [stealTeamIndices, setStealTeamIndices] = useState<number[]>([]);
-  
+
   // Daily Double state
   const [showDailyDouble, setShowDailyDouble] = useState(false);
   const [showWagerInput, setShowWagerInput] = useState(false);
@@ -61,9 +61,12 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     question: any;
     pickerTeamIndex: number;
   } | null>(null);
-  
+
   // Audio ref for Daily Double sound
   const dailyDoubleAudioRef = useRef<HTMLAudioElement>(null);
+  // Question text container ref for dynamic font sizing
+  const questionTextRef = useRef<HTMLDivElement>(null);
+  const [questionFontSize, setQuestionFontSize] = useState<number>(48);
   // Round summary state
   const [showRoundSummary, setShowRoundSummary] = useState(false);
 
@@ -92,11 +95,72 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     }
   }, [showDailyDouble]);
 
+  // Calculate optimal font size for question text based on container dimensions
+  useEffect(() => {
+    if (!selectedQuestion) return;
+
+    const calculateFontSize = () => {
+      const container = questionTextRef.current;
+      if (!container || container.clientHeight === 0 || container.clientWidth === 0) {
+        // Retry after a short delay if container isn't ready
+        setTimeout(calculateFontSize, 50);
+        return;
+      }
+
+      const containerHeight = container.clientHeight;
+      const containerWidth = container.clientWidth;
+      const text = selectedQuestion.question.text.toUpperCase();
+
+      // Start with a large font size and reduce until it fits
+      let fontSize = Math.min(containerHeight / 3, containerWidth / 10);
+      let fits = false;
+      let iterations = 0;
+      const maxIterations = 50;
+
+      while (!fits && iterations < maxIterations) {
+        // Create a temporary element to measure text
+        const tempElement = document.createElement('div');
+        tempElement.style.position = 'absolute';
+        tempElement.style.visibility = 'hidden';
+        tempElement.style.whiteSpace = 'normal';
+        tempElement.style.wordWrap = 'break-word';
+        tempElement.style.width = `${containerWidth - 32}px`; // Account for padding
+        tempElement.style.fontSize = `${fontSize}px`;
+        tempElement.style.fontFamily = 'sans-serif';
+        tempElement.style.fontWeight = 'bold';
+        tempElement.style.lineHeight = '1.1';
+        tempElement.textContent = text;
+        document.body.appendChild(tempElement);
+
+        const textHeight = tempElement.scrollHeight;
+        document.body.removeChild(tempElement);
+
+        if (textHeight <= containerHeight - 16) { // Account for padding
+          fits = true;
+        } else {
+          fontSize *= 0.9; // Reduce by 10%
+        }
+        iterations++;
+      }
+
+      setQuestionFontSize(Math.max(fontSize, 16)); // Minimum 16px
+    };
+
+    // Use requestAnimationFrame to ensure DOM is ready
+    requestAnimationFrame(() => {
+      setTimeout(calculateFontSize, 100);
+    });
+
+    // Recalculate on window resize
+    window.addEventListener('resize', calculateFontSize);
+    return () => window.removeEventListener('resize', calculateFontSize);
+  }, [selectedQuestion]);
+
   const loadGame = async () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       // Load game
       const gameResponse = await gameApi.getById(id);
       if (!gameResponse.success || !gameResponse.data) {
@@ -104,24 +168,24 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
         return;
       }
       setGame(gameResponse.data);
-      
+
       // Load rounds with categories and questions
       const roundsData: ExtendedRound[] = [];
       for (const roundId of gameResponse.data.roundIds) {
         const roundResponse = await roundApi.getById(roundId.toString());
         if (!roundResponse.success || !roundResponse.data) continue;
-        
+
         const round = roundResponse.data;
         const categories: (Category & { questions: Question[] })[] = [];
-        
+
         // Fetch categories for this round
         for (const categoryId of round.categoryIds) {
           const categoryResponse = await categoryApi.getById(categoryId.toString());
           if (!categoryResponse.success || !categoryResponse.data) continue;
-          
+
           const category = categoryResponse.data;
           const questions: Question[] = [];
-          
+
           // Fetch questions for this category
           for (const questionId of category.questionIds) {
             const questionResponse = await questionApi.getById(questionId.toString());
@@ -129,37 +193,20 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
               questions.push(questionResponse.data);
             }
           }
-          
+
           categories.push({
             ...category,
             questions,
           });
         }
-        
+
         roundsData.push({
           ...round,
           categories,
         });
       }
       setRounds(roundsData);
-      
-      // Load Final Jeopardy category if it exists
-      if (gameResponse.data.finalCategoryId) {
-        const finalCatResponse = await categoryApi.getById(gameResponse.data.finalCategoryId.toString());
-        if (finalCatResponse.success && finalCatResponse.data) {
-          const finalCat = finalCatResponse.data;
-          if (finalCat.questionIds && finalCat.questionIds.length > 0) {
-            const finalQuestionResponse = await questionApi.getById(finalCat.questionIds[0].toString());
-            if (finalQuestionResponse.success && finalQuestionResponse.data) {
-              setFinalCategory({
-                ...finalCat,
-                questions: [finalQuestionResponse.data],
-              });
-            }
-          }
-        }
-      }
-      
+
       // Log all Daily Double questions
       console.log('=== DAILY DOUBLE QUESTIONS ===');
       roundsData.forEach((round, roundIndex) => {
@@ -178,7 +225,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
         });
       });
       console.log('=============================');
-      
+
       // Check for existing game state, create one if it doesn't exist
       const stateResponse = await gameStateApi.getByGameId(id);
       if (stateResponse.success && stateResponse.data) {
@@ -192,14 +239,14 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       } else {
         // Create a new game state with empty teams (this will generate a join code)
         // The backend will check if one already exists and return it instead of creating a duplicate
-          const createResponse = await gameStateApi.create({
-            gameId: id,
-            teams: [],
-            currentTeamIndex: 0,
-            questionPickerTeamIndex: 0,
-            currentRoundIndex: 0,
-            completedQuestionIds: [],
-          });
+        const createResponse = await gameStateApi.create({
+          gameId: id,
+          teams: [],
+          currentTeamIndex: 0,
+          questionPickerTeamIndex: 0,
+          currentRoundIndex: 0,
+          completedQuestionIds: [],
+        });
         if (createResponse.success && createResponse.data) {
           console.log('Game state with joinCode:', createResponse.data.joinCode);
           setGameState(createResponse.data);
@@ -272,7 +319,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       setError('At least one team must join before starting');
       return;
     }
-    
+
     // Update game state to 'active'
     try {
       const response = await gameStateApi.update(gameState._id.toString(), {
@@ -292,20 +339,20 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
 
   const handleCellClick = async (catIndex: number, qIndex: number) => {
     if (!rounds.length || !gameState) return;
-    
+
     const currentRound = rounds[gameState.currentRoundIndex];
     if (!currentRound || !currentRound.categories[catIndex]) return;
-    
+
     const category = currentRound.categories[catIndex];
     const question = category.questions[qIndex];
-    
+
     if (!question) return;
-    
+
     // Check if question is already completed
     if (gameState.completedQuestionIds.includes(question._id.toString())) {
       return;
     }
-    
+
     // Check if this is a Daily Double
     if (question.isDailyDouble) {
       console.log('Daily Double detected!', {
@@ -322,7 +369,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       setShowWagerInput(false);
       setWagerAmount('');
       setIsAnimating(true);
-      
+
       // Don't set state to question_active yet - wait until wager is submitted
       // Keep state as 'active' so clients see "waiting for question" during wagering
     } else {
@@ -332,11 +379,12 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       setIsStealMode(false);
       setOriginalTeamIndex(null);
       setStealTeamIndices([]);
-      
+
       // Update game state to question_active when question is selected
       const updateResponse = await gameStateApi.update(gameState._id.toString(), {
         state: 'question_active',
         buzzedTeamId: null, // Clear any previous buzz-in
+        failedTeamIds: [], // Clear failed teams for new question
         questionPickerTeamIndex: pickerTeamIndex, // Track which team picked this question
       });
       console.log('[Host] Updated state to question_active:', updateResponse);
@@ -349,7 +397,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     if (gameState && selectedQuestion && !showAnswer && isStealMode) {
       await handleQuestionClosedNoCorrectAnswer();
     }
-    
+
     setSelectedQuestion(null);
     setShowAnswer(false);
     setIsAnimating(false);
@@ -360,7 +408,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     setShowWagerInput(false);
     setWagerAmount('');
     setDailyDoubleQuestion(null);
-    
+
     // Reset game state back to active (question closed, ready for next question)
     if (gameState) {
       await gameStateApi.update(gameState._id.toString(), {
@@ -373,23 +421,23 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
   const handleWagerSubmit = async () => {
     const wager = parseInt(wagerAmount);
     if (!dailyDoubleQuestion || !gameState || isNaN(wager) || wager < 0) return;
-    
+
     // Get current team's score to validate max wager
     // In Jeopardy, you can wager up to your current score OR the maximum question value, whichever is higher
     const currentTeam = gameState.teams[gameState.currentTeamIndex];
     const maxWager = Math.max(currentTeam.score, dailyDoubleQuestion.question.points);
-    
+
     // Clamp wager to valid range (0 to maxWager)
     const finalWager = Math.min(Math.max(wager, 0), maxWager);
-    
+
     // Create a modified question with the wager amount overriding the original points
-    // This wager amount will be used for both correct/incorrect answers and steal attempts
     const modifiedQuestion = {
       ...dailyDoubleQuestion.question,
       points: finalWager, // Wager replaces original question points
+      isDailyDouble: true, // Keep the Daily Double flag
     };
-    
-    setSelectedQuestion({ 
+
+    setSelectedQuestion({
       catIndex: dailyDoubleQuestion.catIndex,
       qIndex: dailyDoubleQuestion.qIndex,
       question: modifiedQuestion,
@@ -403,6 +451,16 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     setIsStealMode(false);
     setOriginalTeamIndex(null);
     setStealTeamIndices([]);
+
+    // For Daily Double, set state to 'answering' with the picker team as the buzzed team
+    // This prevents other teams from buzzing in
+    const pickerTeam = gameState.teams[dailyDoubleQuestion.pickerTeamIndex];
+    await updateGameState({
+      state: 'answering',
+      buzzedTeamId: pickerTeam.id, // Set picker as the only one who can answer
+      failedTeamIds: [] as any, // Clear failed teams for Daily Double
+    } as any);
+
     // Trigger animation for question display
     setIsAnimating(true);
     // Reset animation after it completes
@@ -411,6 +469,32 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
 
   const revealAnswer = () => {
     setShowAnswer(true);
+  };
+
+  // Manually set which team is answering (fallback if buzzer doesn't work)
+  const handleManualTeamSelect = async (teamId: string) => {
+    if (!gameState || !selectedQuestion) return;
+
+    // Don't allow manual selection for Daily Double (only picker can answer)
+    if (selectedQuestion.question.isDailyDouble) return;
+
+    // Don't allow if someone already buzzed in
+    if (gameState.buzzedTeamId) return;
+
+    // Check if team has already failed
+    const failedTeamIds = gameState.failedTeamIds || [];
+    if (failedTeamIds.includes(teamId)) {
+      console.log('[HOST] Team already failed, cannot select manually');
+      return;
+    }
+
+    console.log('[HOST] Manually selecting team:', teamId);
+
+    // Set the team as buzzed in and change state to answering
+    await updateGameState({
+      buzzedTeamId: teamId,
+      state: 'answering',
+    });
   };
 
   const getNextTeamIndex = (currentIndex: number) => {
@@ -431,24 +515,43 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     if (!gameState) return;
 
     try {
-      const response = await gameStateApi.update(gameState._id.toString(), {
+      const updatePayload = {
         ...updates,
         teams: updates.teams ? (updates.teams as Team[]) : undefined,
-      } as any);
+      } as any;
+
+      if (updatePayload.failedTeamIds) {
+        console.log('[HOST] Updating gameState with failedTeamIds:', {
+          failedTeamIds: updatePayload.failedTeamIds,
+          totalTeams: gameState.teams.length,
+          gameStateId: gameState._id.toString()
+        });
+      }
+
+      const response = await gameStateApi.update(gameState._id.toString(), updatePayload);
       if (response.success && response.data) {
         const updatedState = response.data;
+
+        if (updatedState.failedTeamIds) {
+          console.log('[HOST] Updated gameState received:', {
+            failedTeamIds: updatedState.failedTeamIds,
+            failedCount: updatedState.failedTeamIds.length,
+            totalTeams: updatedState.teams.length
+          });
+        }
+
         setGameState(updatedState);
-        
+
         // Check if current round is complete
         if (updatedState && rounds.length > 0) {
           const currentRound = rounds[updatedState.currentRoundIndex];
           if (currentRound) {
-            const allQuestionIds = currentRound.categories.flatMap(cat => 
+            const allQuestionIds = currentRound.categories.flatMap(cat =>
               cat.questions.map(q => q._id.toString())
             );
-            const isRoundComplete = allQuestionIds.length > 0 && 
+            const isRoundComplete = allQuestionIds.length > 0 &&
               allQuestionIds.every(id => updatedState.completedQuestionIds.includes(id));
-            
+
             // Show summary if round is complete (whether it's the last round or not)
             if (isRoundComplete) {
               setShowRoundSummary(true);
@@ -459,21 +562,12 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
             if (isRoundComplete && isLastRound) {
               // Check if ALL rounds are complete
               const allRoundsComplete = rounds.every((round) => {
-                const roundQuestionIds = round.categories.flatMap(cat => 
+                const roundQuestionIds = round.categories.flatMap(cat =>
                   cat.questions.map(q => q._id.toString())
                 );
-                return roundQuestionIds.length > 0 && 
+                return roundQuestionIds.length > 0 &&
                   roundQuestionIds.every(id => updatedState.completedQuestionIds.includes(id));
               });
-
-              // Automatically transition to Final Jeopardy if all rounds are complete
-              if (allRoundsComplete && updatedState.state !== 'final_jeopardy' && updatedState.state !== 'finished') {
-                // Transition to final jeopardy state
-                await gameStateApi.update(updatedState._id.toString(), {
-                  state: 'final_jeopardy',
-                });
-                // The SSE update will update the local state
-              }
             }
           }
         }
@@ -489,7 +583,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
 
   const handleNextRound = async () => {
     if (!gameState || !rounds.length) return;
-    
+
     const nextRoundIndex = gameState.currentRoundIndex + 1;
     if (nextRoundIndex < rounds.length) {
       await updateGameState({
@@ -506,19 +600,47 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     // Get the team that buzzed in (from buzzedTeamId)
     const buzzedTeamId = gameState.buzzedTeamId;
     if (!buzzedTeamId) return; // Should have a buzzed team at this point
-    
+
     const buzzedTeamIndex = gameState.teams.findIndex(t => t.id === buzzedTeamId);
     if (buzzedTeamIndex === -1) return;
 
     const question = selectedQuestion.question;
     const questionId = question._id.toString();
     const points = question.points;
+    const isDailyDouble = question.isDailyDouble;
+
+    // For Daily Double, always show answer and end question after answering
+    if (isDailyDouble) {
+      setShowAnswer(true); // Always show answer for Daily Double
+
+      const updatedTeams = gameState.teams.map((team, idx) =>
+        idx === buzzedTeamIndex
+          ? {
+            id: team.id,
+            name: team.name,
+            score: isCorrect ? team.score + points : team.score - points
+          }
+          : { id: team.id, name: team.name, score: team.score }
+      );
+
+      const completedQuestionIds = [...gameState.completedQuestionIds, questionId];
+
+      await updateGameState({
+        teams: updatedTeams as any,
+        questionPickerTeamIndex: buzzedTeamIndex, // The team that answered controls the board
+        currentTeamIndex: buzzedTeamIndex, // Also update for backwards compatibility
+        completedQuestionIds,
+        state: 'showing_answer', // Set state to showing_answer so clients see "waiting for next question"
+        buzzedTeamId: null, // Clear buzz-in when question is answered
+      });
+      return; // Exit early for Daily Double
+    }
 
     if (isCorrect) {
       // Team got it right - they now control the board (get to pick next question)
       setShowAnswer(true);
-      
-      const updatedTeams = gameState.teams.map((team, idx) => 
+
+      const updatedTeams = gameState.teams.map((team, idx) =>
         idx === buzzedTeamIndex
           ? { id: team.id, name: team.name, score: team.score + points }
           : { id: team.id, name: team.name, score: team.score }
@@ -545,15 +667,44 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
 
       setIsStealMode(true);
       setShowAnswer(false); // Keep question visible for steal attempts
-      
-      // Update teams (points deducted) but keep question active for stealing
-      // Anyone can now buzz in to steal (buzzedTeamId will be set when they buzz)
-      // Keep state as 'question_active' so clients can buzz in again
-      await updateGameState({
-        teams: updatedTeams as any,
-        state: 'question_active', // Ensure state is question_active so clients can buzz in
-        buzzedTeamId: null, // Clear buzz-in so anyone can buzz in to steal
+
+      // Add this team to the list of teams that have already tried and failed
+      const currentFailedTeamIds = gameState.failedTeamIds || [];
+      const updatedFailedTeamIds = currentFailedTeamIds.includes(buzzedTeamId)
+        ? currentFailedTeamIds
+        : [...currentFailedTeamIds, buzzedTeamId];
+
+      console.log('[HOST] Team got it wrong:', {
+        buzzedTeamId,
+        buzzedTeamIndex,
+        currentFailedTeamIds,
+        updatedFailedTeamIds,
+        totalTeams: gameState.teams.length,
+        allTeamsFailed: updatedFailedTeamIds.length >= gameState.teams.length
       });
+
+      // Also update component state for UI checks
+      const updatedStealTeamIndices = stealTeamIndices.includes(buzzedTeamIndex)
+        ? stealTeamIndices
+        : [...stealTeamIndices, buzzedTeamIndex];
+      setStealTeamIndices(updatedStealTeamIndices);
+
+      // Check if all teams have now tried and failed (edge case: only one team)
+      if (updatedFailedTeamIds.length >= gameState.teams.length) {
+        console.log('[HOST] All teams have failed - ending question');
+        // All teams have tried and failed - show answer and deduct from original picker
+        await handleAllTeamsFailed();
+      } else {
+        // Update teams (points deducted) but keep question active for stealing
+        // Anyone can now buzz in to steal (buzzedTeamId will be set when they buzz)
+        // Keep state as 'question_active' so clients can buzz in again
+        await updateGameState({
+          teams: updatedTeams as any,
+          failedTeamIds: updatedFailedTeamIds, // Store failed teams in gameState
+          state: 'question_active', // Ensure state is question_active so clients can buzz in
+          buzzedTeamId: null, // Clear buzz-in so anyone can buzz in to steal
+        } as any);
+      }
     }
   };
 
@@ -563,7 +714,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     // Get the team that buzzed in to steal (from buzzedTeamId)
     const buzzedTeamId = gameState.buzzedTeamId;
     if (!buzzedTeamId) return;
-    
+
     const buzzedTeamIndex = gameState.teams.findIndex(t => t.id === buzzedTeamId);
     if (buzzedTeamIndex === -1) return;
 
@@ -574,7 +725,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     if (isCorrect) {
       // Stealing team got it right - they now control the board
       setShowAnswer(true);
-      
+
       const updatedTeams = gameState.teams.map((team, idx) =>
         idx === buzzedTeamIndex
           ? { id: team.id, name: team.name, score: team.score + points }
@@ -594,30 +745,181 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
 
     } else {
       // Stealing team got it wrong - no points lost, allow anyone else to buzz in
-      // Clear the buzz-in so another team can try
-      setShowAnswer(false); // Keep question visible for next steal attempt
-      await updateGameState({
-        state: 'question_active', // Ensure state is question_active so clients can buzz in
-        buzzedTeamId: null, // Clear so another team can buzz in
+      // Add this team to the list of teams that have already tried and failed
+      const currentFailedTeamIds = gameState.failedTeamIds || [];
+      const updatedFailedTeamIds = currentFailedTeamIds.includes(buzzedTeamId)
+        ? currentFailedTeamIds
+        : [...currentFailedTeamIds, buzzedTeamId];
+
+      console.log('[HOST] Steal attempt failed:', {
+        buzzedTeamId,
+        buzzedTeamIndex,
+        currentFailedTeamIds,
+        updatedFailedTeamIds,
+        totalTeams: gameState.teams.length,
+        allTeamsFailed: updatedFailedTeamIds.length >= gameState.teams.length
       });
+
+      // Also update component state for UI checks
+      const updatedStealTeamIndices = stealTeamIndices.includes(buzzedTeamIndex)
+        ? stealTeamIndices
+        : [...stealTeamIndices, buzzedTeamIndex];
+      setStealTeamIndices(updatedStealTeamIndices);
+
+      // Check if all teams have now tried and failed
+      if (updatedFailedTeamIds.length >= gameState.teams.length) {
+        console.log('[HOST] All teams have failed (steal) - ending question');
+        // All teams have tried and failed - show answer and deduct from original picker
+        await handleAllTeamsFailed();
+      } else {
+        // Clear the buzz-in so another team can try
+        setShowAnswer(false); // Keep question visible for next steal attempt
+        await updateGameState({
+          failedTeamIds: updatedFailedTeamIds, // Store failed teams in gameState
+          state: 'question_active', // Ensure state is question_active so clients can buzz in
+          buzzedTeamId: null, // Clear so another team can buzz in
+        } as any);
+      }
     }
   };
 
   // Handle when question is closed without anyone answering correctly (all teams got it wrong)
   const handleQuestionClosedNoCorrectAnswer = async () => {
     if (!gameState || !selectedQuestion) return;
-    
+
     const questionId = selectedQuestion.question._id.toString();
     const pickerTeamIndex = selectedQuestion.pickerTeamIndex;
-    
+
     // Original picker team still controls the board (can pick another question)
     const completedQuestionIds = [...gameState.completedQuestionIds, questionId];
-    
+
     await updateGameState({
       questionPickerTeamIndex: pickerTeamIndex, // Keep original picker
       currentTeamIndex: pickerTeamIndex, // Also update for backwards compatibility
       completedQuestionIds,
       buzzedTeamId: null,
+    });
+  };
+
+  // Handle when no one buzzes in - reveal answer and deduct points from original picker if they haven't already been deducted
+  const handleNoBuzzIn = async () => {
+    if (!gameState || !selectedQuestion) return;
+
+    const questionId = selectedQuestion.question._id.toString();
+    const pickerTeamIndex = selectedQuestion.pickerTeamIndex;
+    const pickerTeam = gameState.teams[pickerTeamIndex];
+    const points = selectedQuestion.question.points;
+    const failedTeamIds = gameState.failedTeamIds || [];
+
+    // Show the answer
+    setShowAnswer(true);
+
+    // Check if original picker is already in failed list
+    const pickerTeamId = pickerTeam?.id;
+    const pickerAlreadyFailed = pickerTeamId && failedTeamIds.includes(pickerTeamId);
+
+    console.log('[HOST] No buzz in - checking if picker should be deducted:', {
+      pickerTeamId,
+      pickerTeamIndex,
+      pickerAlreadyFailed,
+      failedTeamIds
+    });
+
+    let updatedTeams: Team[] = gameState.teams.map(team => ({
+      id: team.id,
+      name: team.name,
+      score: team.score
+    }));
+
+    // Only deduct points if the original picker is NOT in the failed list
+    if (!pickerAlreadyFailed && pickerTeam) {
+      // Picker hasn't been deducted yet - deduct now
+      updatedTeams = gameState.teams.map((team, idx) =>
+        idx === pickerTeamIndex
+          ? { id: team.id, name: team.name, score: team.score - points }
+          : { id: team.id, name: team.name, score: team.score }
+      );
+      console.log('[HOST] Deducting points from picker (no buzz in):', {
+        pickerTeamId,
+        points,
+        oldScore: pickerTeam.score,
+        newScore: pickerTeam.score - points
+      });
+    } else {
+      console.log('[HOST] Picker already deducted or not found, skipping deduction');
+    }
+
+    // Mark question as completed
+    const completedQuestionIds = [...gameState.completedQuestionIds, questionId];
+
+    await updateGameState({
+      teams: updatedTeams as any,
+      questionPickerTeamIndex: pickerTeamIndex, // Keep original picker
+      currentTeamIndex: pickerTeamIndex, // Also update for backwards compatibility
+      completedQuestionIds,
+      state: 'showing_answer', // Set state to showing_answer so clients see "waiting for next question"
+      buzzedTeamId: null, // Clear any buzz-in
+    });
+  };
+
+  // Handle when all teams have tried and failed - show answer and deduct points from original picker
+  const handleAllTeamsFailed = async () => {
+    if (!gameState || !selectedQuestion) return;
+
+    const questionId = selectedQuestion.question._id.toString();
+    const pickerTeamIndex = selectedQuestion.pickerTeamIndex;
+    const pickerTeam = gameState.teams[pickerTeamIndex];
+    const points = selectedQuestion.question.points;
+    const failedTeamIds = gameState.failedTeamIds || [];
+
+    // Show the answer
+    setShowAnswer(true);
+
+    // Only deduct points from the original picker if they haven't already been deducted
+    // (i.e., if they picked the question but never buzzed in, or if they're not in failedTeamIds)
+    const pickerTeamId = pickerTeam?.id;
+    const pickerAlreadyFailed = pickerTeamId && failedTeamIds.includes(pickerTeamId);
+
+    console.log('[HOST] All teams failed - checking if picker already deducted:', {
+      pickerTeamId,
+      pickerTeamIndex,
+      pickerAlreadyFailed,
+      failedTeamIds
+    });
+
+    let updatedTeams: Team[] = gameState.teams.map(team => ({
+      id: team.id,
+      name: team.name,
+      score: team.score
+    }));
+
+    if (!pickerAlreadyFailed && pickerTeam) {
+      // Picker hasn't been deducted yet - deduct now
+      updatedTeams = gameState.teams.map((team, idx) =>
+        idx === pickerTeamIndex
+          ? { id: team.id, name: team.name, score: team.score - points }
+          : { id: team.id, name: team.name, score: team.score }
+      );
+      console.log('[HOST] Deducting points from picker:', {
+        pickerTeamId,
+        points,
+        oldScore: pickerTeam.score,
+        newScore: pickerTeam.score - points
+      });
+    } else {
+      console.log('[HOST] Picker already deducted, skipping deduction');
+    }
+
+    // Mark question as completed
+    const completedQuestionIds = [...gameState.completedQuestionIds, questionId];
+
+    await updateGameState({
+      teams: updatedTeams as any,
+      questionPickerTeamIndex: pickerTeamIndex, // Keep original picker
+      currentTeamIndex: pickerTeamIndex, // Also update for backwards compatibility
+      completedQuestionIds,
+      state: 'showing_answer', // Set state to showing_answer so clients see "waiting for next question"
+      buzzedTeamId: null, // Clear any buzz-in
     });
   };
 
@@ -834,8 +1136,10 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       // Find the client's team ID from URL params or localStorage
       const urlParams = new URLSearchParams(window.location.search);
       const teamId = urlParams.get('teamId') || localStorage.getItem(`game_${id}_teamId`);
-      
-      const canBuzzIn = gameState.state === 'question_active' && !gameState.buzzedTeamId;
+
+      const failedTeamIds = gameState.failedTeamIds || [];
+      const hasAlreadyFailed = teamId ? failedTeamIds.includes(teamId) : false;
+      const canBuzzIn = gameState.state === 'question_active' && !gameState.buzzedTeamId && !hasAlreadyFailed;
       const hasBuzzedIn = gameState.buzzedTeamId === teamId;
       const someoneElseBuzzedIn = gameState.buzzedTeamId && gameState.buzzedTeamId !== teamId;
 
@@ -853,16 +1157,16 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                 className="flex items-center justify-center transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                 onClick={async () => {
                   if (!teamId || !gameState || !canBuzzIn || isBuzzingIn) return;
-                  
+
                   setIsBuzzingIn(true); // Prevent multiple simultaneous calls
-                  
+
                   // Optimistic update: immediately update local state for instant feedback
                   setGameState({
                     ...gameState,
                     buzzedTeamId: teamId,
                     state: 'answering',
                   });
-                  
+
                   try {
                     const response = await gameStateApi.buzzIn(gameState._id.toString(), teamId);
                     // Update with server response if successful
@@ -884,11 +1188,11 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                 }}
                 disabled={!canBuzzIn || !teamId || isBuzzingIn}
               >
-                  <img 
-                    src="/buzzer.png" 
-                    alt="Buzz In" 
-                    className="w-[95vw] max-w-4xl h-auto object-contain hover:brightness-110 active:brightness-90 transition-all"
-                  />
+                <img
+                  src="/buzzer.png"
+                  alt="Buzz In"
+                  className="w-[95vw] max-w-4xl h-auto object-contain hover:brightness-110 active:brightness-90 transition-all"
+                />
               </button>
             </div>
           ) : (
@@ -911,6 +1215,15 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                         Waiting for the host...
                       </p>
                     </>
+                  ) : hasAlreadyFailed ? (
+                    <>
+                      <h1 className="text-3xl font-bold text-slate-600 dark:text-slate-400 mb-4 tracking-wide font-sans uppercase">
+                        Already Tried
+                      </h1>
+                      <p className="text-slate-600 dark:text-slate-400 text-lg">
+                        You cannot buzz in again on this question.
+                      </p>
+                    </>
                   ) : someoneElseBuzzedIn ? (
                     <>
                       <h1 className="text-3xl font-bold text-slate-600 dark:text-slate-400 mb-4 tracking-wide font-sans uppercase">
@@ -921,10 +1234,10 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                       </p>
                     </>
                   ) : null}
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      )}
+          )}
         </>
       );
     }
@@ -985,69 +1298,6 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       );
     }
 
-    // Client Final Jeopardy view (when state is 'final_jeopardy')
-    if (gameState.state === 'final_jeopardy') {
-      const urlParams = new URLSearchParams(window.location.search);
-      const teamId = urlParams.get('teamId') || localStorage.getItem(`game_${id}_teamId`) || '';
-      
-      // Check if this team has already submitted their answer
-      const finalJeopardyAnswers = gameState.finalJeopardyAnswers
-        ? (gameState.finalJeopardyAnswers instanceof Map
-            ? Array.from(gameState.finalJeopardyAnswers.entries())
-            : Object.entries(gameState.finalJeopardyAnswers))
-        : [];
-      const hasSubmitted = finalJeopardyAnswers.some(([tid]) => tid === teamId);
-      
-      if (!finalCategory || !finalCategory.questions[0]) {
-        return (
-          <>
-            {dailyDoubleAudio}
-            <div className="min-h-screen bg-jeopardy-royal/10 dark:bg-jeopardy-blue-dark flex items-center justify-center p-4">
-              <div className="max-w-md mx-auto text-center">
-                <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 border-jeopardy-gold p-8">
-                  <h1 className="text-4xl font-bold text-jeopardy-gold mb-4 tracking-wide font-sans uppercase">
-                    Final Jeopardy
-                  </h1>
-                  <p className="text-slate-600 dark:text-slate-400 text-lg">
-                    Loading question...
-                  </p>
-                </div>
-              </div>
-            </div>
-          </>
-        );
-      }
-
-      return (
-        <>
-          {dailyDoubleAudio}
-          <FinalJeopardyDrawing
-            question={finalCategory.questions[0].text || finalCategory.name || ''}
-            teamId={teamId}
-            gameStateId={gameState._id.toString()}
-            onAnswerSubmitted={async (imageUrl) => {
-              try {
-                const response = await fetch(`/api/game-states/${gameState._id.toString()}/final-jeopardy/submit-answer`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ teamId, imageUrl }),
-                });
-                if (!response.ok) {
-                  throw new Error('Failed to submit answer');
-                }
-                const result = await response.json();
-                if (result.success && result.data) {
-                  setGameState(result.data as GameState);
-                }
-              } catch (err) {
-                console.error('Failed to submit Final Jeopardy answer:', err);
-              }
-            }}
-          />
-        </>
-      );
-    }
-
     // Client finished view (when state is 'finished')
     if (gameState.state === 'finished') {
       return (
@@ -1088,7 +1338,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
               <h1 className="text-4xl font-bold text-jeopardy-gold mb-2 tracking-wide font-sans text-center uppercase">
                 WAITING FOR TEAMS
               </h1>
-              
+
               {/* Join Code */}
               <div className="mb-8 text-center">
                 <p className="text-slate-600 dark:text-slate-400 mb-4 uppercase text-lg">
@@ -1183,20 +1433,20 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
           {/* Snow at bottom - multiple smaller images */}
           <div className="fixed bottom-0 left-0 right-0 z-30 pointer-events-none flex items-end">
             {Array.from({ length: 20 }).map((_, i) => (
-              <img 
+              <img
                 key={i}
-                src="/snow.png" 
-                alt="snow" 
-                className="h-12 md:h-16 lg:h-20 object-contain flex-1" 
+                src="/snow.png"
+                alt="snow"
+                className="h-12 md:h-16 lg:h-20 object-contain flex-1"
               />
             ))}
           </div>
-          
+
           {/* Snowman in bottom left */}
           <div className="fixed bottom-0 left-4 md:left-8 z-30 pointer-events-none">
             <img src="/snowman.png" alt="snowman" className="w-20 h-20 md:w-32 md:h-32 lg:w-40 lg:h-40 xl:w-48 xl:h-48 object-contain drop-shadow-lg" />
           </div>
-          
+
           {/* Christmas tree in bottom right */}
           <div className="fixed bottom-0 right-2 md:right-0 z-30 pointer-events-none">
             <img src="/tree.png" alt="christmas tree" className="w-28 h-28 md:w-40 md:h-40 lg:w-56 lg:h-56 xl:w-72 xl:h-72 object-contain drop-shadow-lg" />
@@ -1283,7 +1533,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
           <div className="fixed right-2 top-3/4 z-30 w-16 h-16 opacity-60 pointer-events-none" style={{ transform: 'rotate(12deg)' }}>
             <img src="/leaf.png" alt="leaf" className="w-full h-full object-contain" />
           </div>
-          
+
           {/* Big Pumpkin */}
           <div className="fixed bottom-8 right-4 z-30 pointer-events-none">
             <img src="/pumpkin.png" alt="pumpkin" className="w-32 h-32 md:w-48 md:h-48 object-contain drop-shadow-lg" />
@@ -1298,14 +1548,14 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
           <div className="fixed bottom-0 left-0 md:left-0 z-30 pointer-events-none">
             <img src="/player.png" alt="football player" className="w-32 h-32 md:w-48 md:h-48 lg:w-64 lg:h-64 object-contain drop-shadow-lg" />
           </div>
-          
+
           {/* Field goal in bottom right */}
           <div className="fixed bottom-0 right-0 md:right-0 z-30 pointer-events-none">
             <img src="/field_goal.png" alt="field goal" className="w-32 h-32 md:w-48 md:h-48 lg:w-64 lg:h-64 object-contain drop-shadow-lg" />
           </div>
         </>
       )}
-      
+
       {/* Header */}
       <div className={`${getHeaderColors().bg} border-b-4 ${getHeaderColors().border} py-4 relative z-20`}>
         <div className="container mx-auto px-4 relative">
@@ -1315,62 +1565,56 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                 {game.name.toUpperCase()}
               </h1>
             </div>
-            <div className="absolute left-1/2 -translate-x-1/2 text-center">
-              <p className={`${getHeaderColors().text} text-3xl md:text-4xl lg:text-5xl font-bold font-sans uppercase tracking-wide`} style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.3)' }}>
-                {controllingTeam?.name.toUpperCase()}&apos;S TURN
-              </p>
-            </div>
             <div className="flex-1 flex justify-end">
               <div className="flex items-center gap-4">
                 {/* Team scores */}
                 <div className="flex gap-2">
-                {gameState.teams.map((team, index) => {
-                  const headerColors = getHeaderColors();
-                  const isControllingTeam = index === pickerTeamIndex;
-                  
-                  // Determine text colors - blue if background is gold
-                  let teamNameColor = '';
-                  let scoreColor = '';
-                  
-                  if (isControllingTeam) {
-                    // Current team uses accent background
-                    if (headerColors.accent === 'bg-jeopardy-gold') {
-                      teamNameColor = 'text-jeopardy-blue';
-                      scoreColor = team.score < 0 ? 'text-red-600' : 'text-jeopardy-blue';
-                    } else if (headerColors.text === 'text-jeopardy-royal') {
-                      teamNameColor = 'text-white';
-                      scoreColor = team.score < 0 ? 'text-red-500' : 'text-white';
+                  {gameState.teams.map((team, index) => {
+                    const headerColors = getHeaderColors();
+                    const isControllingTeam = index === pickerTeamIndex;
+
+                    // Determine text colors - blue if background is gold
+                    let teamNameColor = '';
+                    let scoreColor = '';
+
+                    if (isControllingTeam) {
+                      // Current team uses accent background
+                      if (headerColors.accent === 'bg-jeopardy-gold') {
+                        teamNameColor = 'text-jeopardy-blue';
+                        scoreColor = team.score < 0 ? 'text-red-600' : 'text-jeopardy-blue';
+                      } else if (headerColors.text === 'text-jeopardy-royal') {
+                        teamNameColor = 'text-white';
+                        scoreColor = team.score < 0 ? 'text-red-500' : 'text-white';
+                      } else {
+                        teamNameColor = 'text-white';
+                        scoreColor = team.score < 0 ? 'text-red-500' : 'text-white';
+                      }
                     } else {
-                      teamNameColor = 'text-white';
-                      scoreColor = team.score < 0 ? 'text-red-500' : 'text-white';
+                      // Other teams use header background
+                      if (headerColors.text === 'text-jeopardy-royal') {
+                        teamNameColor = 'text-jeopardy-royal';
+                        scoreColor = team.score < 0 ? 'text-red-600' : 'text-jeopardy-royal';
+                      } else {
+                        teamNameColor = 'text-white';
+                        scoreColor = team.score < 0 ? 'text-red-300' : 'text-white';
+                      }
                     }
-                  } else {
-                    // Other teams use header background
-                    if (headerColors.text === 'text-jeopardy-royal') {
-                      teamNameColor = 'text-jeopardy-royal';
-                      scoreColor = team.score < 0 ? 'text-red-600' : 'text-jeopardy-royal';
-                    } else {
-                      teamNameColor = 'text-white';
-                      scoreColor = team.score < 0 ? 'text-red-300' : 'text-white';
-                    }
-                  }
-                  
-                  return (
-                    <div
-                      key={team.id}
-                      className={`px-4 py-2 rounded-lg font-bold text-center ${
-                        isControllingTeam
+
+                    return (
+                      <div
+                        key={team.id}
+                        className={`px-4 py-2 rounded-lg font-bold text-center ${isControllingTeam
                           ? `${headerColors.accent} border-2 ${headerColors.border}`
                           : `${headerColors.bg}`
-                      }`}
-                    >
-                      <div className={`text-xs uppercase tracking-wide text-center ${teamNameColor}`}>{team.name.toUpperCase()}</div>
-                      <div className={`text-xl text-center ${scoreColor}`}>
-                        {team.score < 0 ? '-' : ''}${Math.abs(team.score)}
+                          }`}
+                      >
+                        <div className={`text-xs uppercase tracking-wide text-center ${teamNameColor}`}>{team.name.toUpperCase()}</div>
+                        <div className={`text-xl text-center ${scoreColor}`}>
+                          {team.score < 0 ? '-' : ''}${Math.abs(team.score)}
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
                 </div>
                 <button
                   onClick={async () => {
@@ -1387,110 +1631,73 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                 >
                   Exit
                 </button>
-                {/* Final Jeopardy Button (for testing) */}
-                {gameState.state !== 'final_jeopardy' && gameState.state !== 'finished' && finalCategory && (
-                  <button
-                    onClick={async () => {
-                      if (gameState) {
-                        await gameStateApi.update(gameState._id.toString(), {
-                          state: 'final_jeopardy',
-                        });
-                      }
-                    }}
-                    className="bg-yellow-500 hover:bg-yellow-600 text-white font-bold py-2 px-4 rounded-lg transition-colors shadow-lg uppercase tracking-wide border-2 border-yellow-600 text-sm"
-                    title="Test Final Jeopardy (manual activation)"
-                  >
-                    Final Jeopardy
-                  </button>
-                )}
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      {/* Host Final Jeopardy View */}
-      {isHost && gameState.state === 'final_jeopardy' && finalCategory && finalCategory.questions[0] && (
-        <>
-          {dailyDoubleAudio}
-          <FinalJeopardyHostView
-            question={finalCategory.questions[0].text || finalCategory.name || ''}
-            answer={finalCategory.questions[0].answer || ''}
-            gameState={gameState}
-            onFinish={async () => {
-              if (gameState) {
-                await gameStateApi.update(gameState._id.toString(), {
-                  state: 'finished',
-                });
-              }
-            }}
-          />
-        </>
-      )}
-
       {/* Game Board - Hide if Final Jeopardy is active */}
       {gameState.state !== 'final_jeopardy' && (
-      <div className="container mx-auto px-2 md:px-4 py-1 md:py-2 h-[calc(100vh-120px)] flex flex-col relative z-20">
-        <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 ${
-          game?.theme === Theme.Christmas ? 'border-red-600' : 
-          game?.theme === Theme.Fall ? 'border-amber-800' : 
-          game?.theme === Theme.Birthday ? 'border-sky-500' :
-          game?.theme === Theme.Football ? 'border-white' :
-          'border-jeopardy-gold'
-        } p-2 md:p-4 flex-1 flex flex-col overflow-hidden`}>
-          
-          <table className="w-full h-full border-collapse table-fixed">
-            <thead>
-              <tr className="h-[15%]">
-                {currentRound.categories.map((category: any) => {
-                  const headerColors = getHeaderColors();
-                  return (
-                    <th
-                      key={category._id.toString()}
-                      className={`${headerColors.bg} text-white p-1 md:p-2 border-2 md:border-4 ${headerColors.border} font-sans w-[20%] text-sm md:text-base lg:text-lg xl:text-xl 2xl:text-2xl font-bold uppercase`}
-                    >
-                      {category.name.toUpperCase()}
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {[0, 1, 2, 3, 4].map((qIndex) => (
-                <tr key={qIndex} className="h-[17%]">
-                  {currentRound.categories.map((category: any, catIndex: number) => {
-                    const question = category.questions[qIndex];
-                    const isCompleted = question && gameState.completedQuestionIds.includes(question._id.toString());
-                    const cellColors = getCellColors(catIndex, qIndex);
-                    
+        <div className="container mx-auto px-2 md:px-4 py-1 md:py-2 h-[calc(100vh-120px)] flex flex-col relative z-20">
+          <div className={`bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border-4 ${game?.theme === Theme.Christmas ? 'border-red-600' :
+            game?.theme === Theme.Fall ? 'border-amber-800' :
+              game?.theme === Theme.Birthday ? 'border-sky-500' :
+                game?.theme === Theme.Football ? 'border-white' :
+                  'border-jeopardy-gold'
+            } p-2 md:p-4 flex-1 flex flex-col overflow-hidden`}>
+
+            <table className="w-full h-full border-collapse table-fixed">
+              <thead>
+                <tr className="h-[15%]">
+                  {currentRound.categories.map((category: any) => {
+                    const headerColors = getHeaderColors();
                     return (
-                      <td
-                        key={`${category._id}-${qIndex}`}
-                        className={`${cellColors.bg} ${!isCompleted ? cellColors.hover : ''} border-2 md:border-4 ${cellColors.border} p-0.5 md:p-1 transition-colors text-center ${
-                          isCompleted ? 'cursor-not-allowed' : 'cursor-pointer'
-                        }`}
-                        onClick={() => !isCompleted && handleCellClick(catIndex, qIndex)}
+                      <th
+                        key={category._id.toString()}
+                        className={`${headerColors.bg} text-white p-1 md:p-2 border-2 md:border-4 ${headerColors.border} font-sans w-[20%] text-sm md:text-base lg:text-lg xl:text-xl 2xl:text-2xl font-bold uppercase`}
                       >
-                        {isCompleted ? (
-                          <div></div>
-                        ) : question ? (
-                          <div className={`${cellColors.text} text-3xl md:text-4xl lg:text-5xl xl:text-6xl 2xl:text-7xl font-black font-sans`}>
-                            ${question.points}
-                          </div>
-                        ) : (
-                          <div className={`${cellColors.text} text-3xl md:text-4xl lg:text-5xl xl:text-6xl 2xl:text-7xl font-black font-sans`}>
-                            —
-                          </div>
-                        )}
-                      </td>
+                        {category.name.toUpperCase()}
+                      </th>
                     );
                   })}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {[0, 1, 2, 3, 4].map((qIndex) => (
+                  <tr key={qIndex} className="h-[17%]">
+                    {currentRound.categories.map((category: any, catIndex: number) => {
+                      const question = category.questions[qIndex];
+                      const isCompleted = question && gameState.completedQuestionIds.includes(question._id.toString());
+                      const cellColors = getCellColors(catIndex, qIndex);
+
+                      return (
+                        <td
+                          key={`${category._id}-${qIndex}`}
+                          className={`${cellColors.bg} ${!isCompleted ? cellColors.hover : ''} border-2 md:border-4 ${cellColors.border} p-0.5 md:p-1 transition-colors text-center ${isCompleted ? 'cursor-not-allowed' : 'cursor-pointer'
+                            }`}
+                          onClick={() => !isCompleted && handleCellClick(catIndex, qIndex)}
+                        >
+                          {isCompleted ? (
+                            <div></div>
+                          ) : question ? (
+                            <div className={`${cellColors.text} text-3xl md:text-4xl lg:text-5xl xl:text-6xl 2xl:text-7xl font-black font-sans`}>
+                              ${question.points}
+                            </div>
+                          ) : (
+                            <div className={`${cellColors.text} text-3xl md:text-4xl lg:text-5xl xl:text-6xl 2xl:text-7xl font-black font-sans`}>
+                              —
+                            </div>
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
       )}
 
       {/* Round Summary Modal - Only show if not in Final Jeopardy */}
@@ -1507,28 +1714,26 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                   GAME OVER
                 </h1>
               )}
-              
+
               <div className="bg-white/10 rounded-2xl p-8 mb-8 backdrop-blur-sm">
                 <h2 className="text-2xl md:text-3xl font-bold text-white mb-6 font-sans uppercase tracking-wide" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
                   {gameState.currentRoundIndex < rounds.length - 1 ? 'CURRENT STANDINGS' : 'FINAL RESULTS'}
                 </h2>
-                
+
                 <div className="space-y-4">
                   {gameState.teams
                     .sort((a, b) => b.score - a.score)
                     .map((team, index) => (
                       <div
                         key={team.id}
-                        className={`flex items-center justify-between p-4 rounded-lg ${
-                          index === 0
-                            ? 'bg-jeopardy-gold text-jeopardy-blue'
-                            : 'bg-white/20 text-white'
-                        }`}
+                        className={`flex items-center justify-between p-4 rounded-lg ${index === 0
+                          ? 'bg-jeopardy-gold text-jeopardy-blue'
+                          : 'bg-white/20 text-white'
+                          }`}
                       >
                         <div className="flex items-center gap-4">
-                          <div className={`text-2xl md:text-3xl font-bold ${
-                            index === 0 ? 'text-jeopardy-blue' : 'text-jeopardy-gold'
-                          }`}>
+                          <div className={`text-2xl md:text-3xl font-bold ${index === 0 ? 'text-jeopardy-blue' : 'text-jeopardy-gold'
+                            }`}>
                             #{index + 1}
                           </div>
                           <div className="text-xl md:text-2xl font-bold font-sans uppercase">
@@ -1538,16 +1743,15 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                             )}
                           </div>
                         </div>
-                        <div className={`text-3xl md:text-4xl font-bold font-sans ${
-                          index === 0 ? 'text-jeopardy-blue' : 'text-jeopardy-gold'
-                        }`}>
+                        <div className={`text-3xl md:text-4xl font-bold font-sans ${index === 0 ? 'text-jeopardy-blue' : 'text-jeopardy-gold'
+                          }`}>
                           ${team.score}
                         </div>
                       </div>
                     ))}
                 </div>
               </div>
-              
+
               {gameState.currentRoundIndex < rounds.length - 1 ? (
                 <button
                   onClick={handleNextRound}
@@ -1579,13 +1783,13 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
 
       {/* Daily Double Modal */}
       {showDailyDouble && dailyDoubleQuestion && gameState && (
-        <div 
+        <div
           className="fixed inset-0 z-50 spin-in"
           style={{
             background: 'linear-gradient(to bottom, #1e3a8a 0%, #7c3aed 30%, #d946ef 60%, #ea580c 100%)',
           }}
         >
-          <div 
+          <div
             className="w-full h-full flex flex-col items-center justify-center p-8 md:p-12 text-center overflow-hidden relative"
             onClick={() => !showWagerInput && setShowWagerInput(true)}
           >
@@ -1598,7 +1802,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
             {!showWagerInput ? (
               /* Daily Double Title */
               <div className="relative z-10 cursor-pointer">
-                <h1 
+                <h1
                   className="text-6xl md:text-8xl lg:text-9xl xl:text-[12rem] font-black uppercase tracking-wider"
                   style={{
                     color: '#FFFFFF',
@@ -1625,7 +1829,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
               <div className="relative z-10 flex flex-col items-center gap-8">
                 <h2 className="text-white text-3xl md:text-4xl lg:text-5xl font-bold uppercase tracking-wide" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>
                   {gameState.teams[gameState.currentTeamIndex].name.toUpperCase()} WAGER
-              </h2>
+                </h2>
                 <div className="flex flex-col items-center gap-4">
                   <div className="relative flex items-center justify-center">
                     <span className="absolute left-0 text-white text-3xl md:text-4xl font-bold -translate-x-full pr-2" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}>$</span>
@@ -1648,14 +1852,14 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                   <p className="text-white/70 text-sm md:text-base" style={{ textShadow: '1px 1px 2px rgba(0,0,0,0.5)' }}>
                     Maximum: ${Math.max(gameState.teams[gameState.currentTeamIndex]?.score || 0, dailyDoubleQuestion.question.points)}
                   </p>
-              <button
+                  <button
                     onClick={handleWagerSubmit}
                     className="mt-4 px-8 py-4 bg-white/30 hover:bg-white/40 text-white text-xl md:text-2xl font-bold uppercase tracking-wide rounded-lg transition-colors shadow-lg"
                     style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.5)' }}
-              >
+                  >
                     SUBMIT
-              </button>
-            </div>
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1664,52 +1868,74 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
 
       {/* Question Modal */}
       {selectedQuestion && gameState && (
-        <div 
+        <div
           key={`question-${selectedQuestion.question._id}-${selectedQuestion.catIndex}-${selectedQuestion.qIndex}`}
           className="fixed inset-0 bg-jeopardy-blue flex items-center justify-center z-50 zoom-in"
         >
           <div className="w-full h-full flex flex-col items-center justify-center p-8 md:p-12 text-center overflow-hidden relative">
             {!showAnswer ? (
               /* Question Display */
-              <div className="w-full h-full flex flex-col items-center justify-center gap-4 md:gap-6 relative">
+              <div className="w-full h-full flex flex-col items-center justify-between overflow-hidden">
                 {/* Show buzz-in status prominently at the top */}
-                <div className="absolute top-8 text-center w-full px-4">
-                  {gameState.buzzedTeamId ? (
-                    <div className="text-yellow-300 text-3xl md:text-4xl font-bold font-sans uppercase tracking-wide" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
+                <div className="flex-shrink-0 pt-4 pb-2 text-center w-full px-4">
+                  {selectedQuestion.question.isDailyDouble ? (
+                    <div className="text-yellow-300 text-2xl md:text-3xl font-bold font-sans uppercase tracking-wide" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
+                      {gameState.teams[selectedQuestion.pickerTeamIndex]?.name.toUpperCase()}&apos;S TURN
+                    </div>
+                  ) : gameState.buzzedTeamId ? (
+                    <div className="text-yellow-300 text-2xl md:text-3xl font-bold font-sans uppercase tracking-wide" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
                       {gameState.teams.find(t => t.id === gameState.buzzedTeamId)?.name.toUpperCase()} BUZZED IN!
                     </div>
                   ) : isStealMode ? (
-                    <div className="text-jeopardy-gold text-4xl md:text-5xl font-bold font-sans uppercase tracking-wide animate-pulse" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
+                    <div className="text-jeopardy-gold text-2xl md:text-3xl font-bold font-sans uppercase tracking-wide animate-pulse" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
                       BUZZ IN TO STEAL!
                     </div>
                   ) : (
-                    <div className="text-jeopardy-gold text-4xl md:text-5xl font-bold font-sans uppercase tracking-wide animate-pulse" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
+                    <div className="text-jeopardy-gold text-2xl md:text-3xl font-bold font-sans uppercase tracking-wide animate-pulse" style={{ textShadow: '2px 2px 4px rgba(0,0,0,0.8)' }}>
                       BUZZ IN!
                     </div>
                   )}
                 </div>
-                <div className="flex-1 flex flex-col items-center justify-center gap-4 md:gap-6">
-              {selectedQuestion.question.text && (
-                    <p className="text-white text-4xl md:text-6xl lg:text-7xl xl:text-8xl font-sans font-bold leading-tight px-4 uppercase" style={{ textShadow: '4px 4px 8px rgba(0,0,0,0.5)' }}>
-                      {selectedQuestion.question.text.toUpperCase()}
-                </p>
-              )}
-              {selectedQuestion.question.imageUrl && (
-                    <div className="flex items-center justify-center w-full px-4">
-                <img
-                  src={selectedQuestion.question.imageUrl}
-                  alt="Question"
-                        className="max-w-full max-h-[50vh] w-auto h-auto object-contain rounded-lg"
-                />
+                {/* Question text area - fills remaining space */}
+                <div className="flex-1 flex flex-col items-center justify-center gap-4 md:gap-6 w-full px-4 min-h-0 overflow-hidden">
+                  {selectedQuestion.question.text && (
+                    <div
+                      ref={questionTextRef}
+                      className="w-full h-full flex items-center justify-center px-4 overflow-hidden"
+                    >
+                      <div
+                        className="text-white font-sans font-bold leading-tight uppercase break-words text-center w-full h-full flex items-center justify-center"
+                        style={{
+                          textShadow: '4px 4px 8px rgba(0,0,0,0.5)',
+                          fontSize: `${questionFontSize}px`,
+                          lineHeight: '1.1',
+                          wordWrap: 'break-word',
+                          hyphens: 'auto',
+                          overflow: 'hidden',
+                          padding: '1rem'
+                        }}
+                      >
+                        {selectedQuestion.question.text.toUpperCase()}
+                      </div>
                     </div>
-              )}
-              {selectedQuestion.question.audioUrl && (
-                    <audio controls autoPlay className="w-full max-w-2xl">
-                  <source src={selectedQuestion.question.audioUrl} />
-                </audio>
-              )}
+                  )}
+                  {selectedQuestion.question.imageUrl && (
+                    <div className="w-full h-full flex items-center justify-center px-4 overflow-hidden">
+                      <img
+                        src={selectedQuestion.question.imageUrl}
+                        alt="Question"
+                        className="w-full h-full object-contain rounded-lg"
+                      />
+                    </div>
+                  )}
+                  {selectedQuestion.question.audioUrl && (
+                    <audio controls autoPlay className="w-full max-w-2xl flex-shrink-0">
+                      <source src={selectedQuestion.question.audioUrl} />
+                    </audio>
+                  )}
                 </div>
-                <div className="absolute bottom-8 flex flex-col items-center gap-4">
+                {/* Buttons at bottom */}
+                <div className="flex-shrink-0 pt-2 pb-4 flex flex-col items-center gap-2">
                   <div className="flex gap-6">
                     <button
                       onClick={() => isStealMode ? handleStealAnswer(true) : handleAnswer(true)}
@@ -1718,17 +1944,52 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                       ✓
                     </button>
                     <button
-                      onClick={() => isStealMode ? handleStealAnswer(false) : handleAnswer(false)}
+                      onClick={() => {
+                        // If no one has buzzed in, reveal answer (will deduct if picker not in failed list)
+                        if (!gameState?.buzzedTeamId) {
+                          handleNoBuzzIn();
+                        } else if (isStealMode) {
+                          // Someone buzzed in during steal mode - mark as wrong
+                          handleStealAnswer(false);
+                        } else {
+                          // Someone buzzed in normally - mark as wrong
+                          handleAnswer(false);
+                        }
+                      }}
                       className="bg-white/30 hover:bg-white/40 text-white font-bold w-16 h-16 md:w-20 md:h-20 lg:w-24 lg:h-24 rounded-full transition-colors shadow-lg flex items-center justify-center text-3xl md:text-4xl lg:text-5xl"
                     >
                       ✗
                     </button>
                   </div>
                 </div>
+                {/* Manual team selection buttons (fallback if buzzer doesn't work) */}
+                {!selectedQuestion.question.isDailyDouble && !gameState.buzzedTeamId && (
+                  <div className="absolute bottom-4 right-4 flex flex-col gap-2">
+                    <div className="text-white/70 text-xs mb-1 text-right">Manual Select:</div>
+                    {gameState.teams.map((team) => {
+                      const failedTeamIds = gameState.failedTeamIds || [];
+                      const hasFailed = failedTeamIds.includes(team.id);
+                      return (
+                        <button
+                          key={team.id}
+                          onClick={() => handleManualTeamSelect(team.id)}
+                          disabled={hasFailed}
+                          className={`px-3 py-1.5 text-sm font-bold rounded transition-colors ${hasFailed
+                            ? 'bg-gray-600/50 text-gray-400 cursor-not-allowed'
+                            : 'bg-white/30 hover:bg-white/40 text-white'
+                            }`}
+                          title={hasFailed ? 'This team has already tried and failed' : `Select ${team.name} to answer`}
+                        >
+                          {team.name}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             ) : (
               /* Answer Display - Only shown when all teams have finished (not during steal mode) */
-              <div 
+              <div
                 className="w-full h-full flex flex-col items-center justify-center gap-6 cursor-pointer relative"
                 onClick={closeQuestion}
               >
@@ -1738,10 +1999,10 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
                 <p className="text-white/70 text-lg md:text-xl font-sans uppercase tracking-wide absolute bottom-8">
                   CLICK TO CLOSE
                 </p>
-            </div>
+              </div>
             )}
+          </div>
         </div>
-      </div>
       )}
       {dailyDoubleAudio}
     </div>
