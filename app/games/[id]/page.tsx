@@ -275,16 +275,42 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
         const message = JSON.parse(event.data);
 
         if (message.type === 'update' && message.data) {
-          // Only update state if we're not in the middle of a buzz-in operation
-          // OR if the server confirms our buzz-in (buzzedTeamId matches our optimistic update)
-          // This prevents race conditions where optimistic updates get overwritten by stale SSE updates
-          if (!isBuzzingIn) {
+          // Check if current user is the host (hosts have a userId, clients don't)
+          const currentUserId = getUserId();
+          const isHostUser = currentUserId !== null && game && currentUserId === game.userId;
+
+          // Log updates for debugging
+          if (message.data.buzzedTeamId) {
+            console.log('[SSE] Buzz-in update received:', {
+              isHost: isHostUser,
+              buzzedTeamId: message.data.buzzedTeamId,
+              buzzedTeamName: message.data.teams?.find((t: any) => t.id === message.data.buzzedTeamId)?.name,
+              isBuzzingIn,
+              willUpdate: isHostUser || !isBuzzingIn
+            });
+          }
+
+          // Safeguard: If state is 'question_active', always clear failedTeamIds (new question = fresh start)
+          if (message.data.state === 'question_active' && message.data.failedTeamIds && message.data.failedTeamIds.length > 0) {
+            console.log('[SSE] Clearing stale failedTeamIds for new question:', message.data.failedTeamIds);
+            message.data.failedTeamIds = [];
+          }
+
+          // Host should always receive updates immediately (they need to see who buzzed in)
+          // Clients only update if not in the middle of buzzing in, or if server confirms their buzz-in
+          if (isHostUser || !isBuzzingIn) {
+            // Host always gets updates, or client not buzzing in - update normally
             setGameState(message.data);
+            if (isBuzzingIn && message.data.buzzedTeamId) {
+              // Server confirmed a buzz-in, clear the flag
+              setIsBuzzingIn(false);
+            }
           } else if (message.data.buzzedTeamId) {
-            // Server confirmed a buzz-in, update state and clear the flag
+            // Client is buzzing in and server confirmed it - update state and clear the flag
             setGameState(message.data);
             setIsBuzzingIn(false);
           }
+
           // Update waiting state for host
           if (message.data.state === 'setup' && message.data.teams.length === 0) {
             setWaitingForTeams(true);
@@ -312,7 +338,7 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     return () => {
       eventSource.close();
     };
-  }, [id, isBuzzingIn]);
+  }, [id, isBuzzingIn, game]);
 
   const handleStartGame = async () => {
     if (!gameState || gameState.teams.length === 0) {
@@ -380,14 +406,33 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       setOriginalTeamIndex(null);
       setStealTeamIndices([]);
 
+      // Immediately clear failedTeamIds in local state for new question
+      setGameState(prev => prev ? {
+        ...prev,
+        failedTeamIds: [],
+        buzzedTeamId: null,
+        state: 'question_active',
+        questionPickerTeamIndex: pickerTeamIndex
+      } : null);
+
       // Update game state to question_active when question is selected
+      // Always clear failedTeamIds for new question - reset both local and server state
       const updateResponse = await gameStateApi.update(gameState._id.toString(), {
         state: 'question_active',
         buzzedTeamId: null, // Clear any previous buzz-in
-        failedTeamIds: [], // Clear failed teams for new question
+        failedTeamIds: [] as any, // Clear failed teams for new question - always reset
         questionPickerTeamIndex: pickerTeamIndex, // Track which team picked this question
+      } as any);
+
+      // Update local state with server response to ensure consistency
+      if (updateResponse.success && updateResponse.data) {
+        setGameState(updateResponse.data);
+      }
+
+      console.log('[Host] Updated state to question_active, cleared failedTeamIds:', {
+        response: updateResponse,
+        failedTeamIds: updateResponse.data?.failedTeamIds
       });
-      console.log('[Host] Updated state to question_active:', updateResponse);
     }
   };
 

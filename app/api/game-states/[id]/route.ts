@@ -75,26 +75,30 @@ export async function PUT(
         gameStateId: id,
         failedTeamIds,
         failedCount: failedTeamIds.length,
+        isArray: Array.isArray(failedTeamIds),
         totalTeams: teams?.length || 'not provided'
       });
     }
 
+    // Build update object - explicitly handle failedTeamIds to ensure empty arrays are set
+    const updateData: any = {};
+    if (gameId !== undefined) updateData.gameId = gameId;
+    if (state !== undefined) updateData.state = state;
+    if (teams !== undefined) updateData.teams = teams;
+    if (currentTeamIndex !== undefined) updateData.currentTeamIndex = currentTeamIndex;
+    if (questionPickerTeamIndex !== undefined) updateData.questionPickerTeamIndex = questionPickerTeamIndex;
+    if (currentRoundIndex !== undefined) updateData.currentRoundIndex = currentRoundIndex;
+    if (completedQuestionIds !== undefined) updateData.completedQuestionIds = completedQuestionIds;
+    if (buzzedTeamId !== undefined) updateData.buzzedTeamId = buzzedTeamId;
+    // Explicitly set failedTeamIds - even if empty array, we want to clear it
+    if (failedTeamIds !== undefined) {
+      updateData.failedTeamIds = Array.isArray(failedTeamIds) ? failedTeamIds : [];
+    }
+    if (finalJeopardyAnswers !== undefined) updateData.finalJeopardyAnswers = finalJeopardyAnswers;
+
            const gameState = await GameStateModel.findByIdAndUpdate(
              id,
-             {
-               ...(gameId !== undefined && { gameId }),
-               ...(state !== undefined && { state }),
-               ...(teams !== undefined && { teams }),
-               ...(currentTeamIndex !== undefined && { currentTeamIndex }),
-               ...(questionPickerTeamIndex !== undefined && {
-                 questionPickerTeamIndex,
-               }),
-               ...(currentRoundIndex !== undefined && { currentRoundIndex }),
-               ...(completedQuestionIds !== undefined && { completedQuestionIds }),
-               ...(buzzedTeamId !== undefined && { buzzedTeamId }),
-               ...(failedTeamIds !== undefined && { failedTeamIds }),
-               ...(finalJeopardyAnswers !== undefined && { finalJeopardyAnswers }),
-             },
+             updateData,
              { new: true, runValidators: true }
            ).lean();
 
@@ -105,13 +109,14 @@ export async function PUT(
       );
     }
 
-    // Log what was actually saved
-    if (gameState.failedTeamIds) {
+    // Log what was actually saved (always log failedTeamIds, even if empty)
+    if (updateData.failedTeamIds !== undefined || gameState.failedTeamIds !== undefined) {
       console.log('[UPDATE] Saved gameState with failedTeamIds:', {
         gameStateId: id,
-        failedTeamIds: gameState.failedTeamIds,
-        failedCount: gameState.failedTeamIds.length,
-        totalTeams: gameState.teams.length
+        failedTeamIds: gameState.failedTeamIds || [],
+        failedCount: (gameState.failedTeamIds || []).length,
+        totalTeams: gameState.teams.length,
+        wasCleared: updateData.failedTeamIds !== undefined && Array.isArray(updateData.failedTeamIds) && updateData.failedTeamIds.length === 0
       });
     }
 

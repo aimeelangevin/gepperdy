@@ -15,6 +15,10 @@ export async function GET(
       const encoder = new TextEncoder();
       let lastUpdateTime = new Date();
       let isActive = true;
+      let lastStateHash = '';
+
+      // Connect to DB once at the start
+      await connectDB();
 
       // Helper function to send SSE message
       const sendMessage = (data: any) => {
@@ -30,7 +34,8 @@ export async function GET(
       // Send initial connection message
       sendMessage({ type: "connected" });
 
-      // Poll for changes every 500ms
+      // Poll for changes every 250ms for near real-time updates
+      // This balances responsiveness with server load
       const pollInterval = setInterval(async () => {
         if (!isActive) {
           clearInterval(pollInterval);
@@ -38,22 +43,30 @@ export async function GET(
         }
 
         try {
-          await connectDB();
           const gameState = await GameStateModel.findOne({ gameId }).lean();
 
           if (gameState) {
             // Convert MongoDB document to plain object
-            // JSON.stringify will automatically convert ObjectId to string, but we need to ensure nested objects are serialized
             const gameStateData = JSON.parse(JSON.stringify(gameState));
-
-            // Send update (client will handle deduplication if needed)
-            sendMessage({
-              type: "update",
-              data: gameStateData,
-              timestamp: new Date().toISOString(),
+            
+            // Create a hash of critical fields that need immediate updates
+            const stateHash = JSON.stringify({
+              buzzedTeamId: gameStateData.buzzedTeamId,
+              state: gameStateData.state,
+              updatedAt: gameStateData.updatedAt,
+              failedTeamIds: gameStateData.failedTeamIds || []
             });
 
-            lastUpdateTime = new Date(gameState.updatedAt || new Date());
+            // Only send update if something actually changed
+            if (stateHash !== lastStateHash) {
+              sendMessage({
+                type: "update",
+                data: gameStateData,
+                timestamp: new Date().toISOString(),
+              });
+              lastStateHash = stateHash;
+              lastUpdateTime = new Date(gameState.updatedAt || new Date());
+            }
           }
         } catch (error) {
           console.error("Error polling game state:", error);
@@ -62,7 +75,7 @@ export async function GET(
             error: error instanceof Error ? error.message : "Unknown error",
           });
         }
-      }, 500); // Poll every 500ms for near real-time updates
+      }, 250); // Poll every 250ms for faster updates (4 times per second)
 
       // Cleanup on client disconnect
       request.signal.addEventListener("abort", () => {
