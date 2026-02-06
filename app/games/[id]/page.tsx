@@ -789,12 +789,19 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       });
 
     } else {
-      // Stealing team got it wrong - no points lost, allow anyone else to buzz in
+      // Stealing team got it wrong - deduct points and allow anyone else to buzz in
       // Add this team to the list of teams that have already tried and failed
       const currentFailedTeamIds = gameState.failedTeamIds || [];
       const updatedFailedTeamIds = currentFailedTeamIds.includes(buzzedTeamId)
         ? currentFailedTeamIds
         : [...currentFailedTeamIds, buzzedTeamId];
+
+      // Deduct points from the team that got it wrong
+      const updatedTeams = gameState.teams.map((team, idx) =>
+        idx === buzzedTeamIndex
+          ? { id: team.id, name: team.name, score: team.score - points }
+          : { id: team.id, name: team.name, score: team.score }
+      );
 
       console.log('[HOST] Steal attempt failed:', {
         buzzedTeamId,
@@ -814,12 +821,13 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
       // Check if all teams have now tried and failed
       if (updatedFailedTeamIds.length >= gameState.teams.length) {
         console.log('[HOST] All teams have failed (steal) - ending question');
-        // All teams have tried and failed - show answer and deduct from original picker
+        // All teams have tried and failed - show answer, control stays with previous controller
         await handleAllTeamsFailed();
       } else {
         // Clear the buzz-in so another team can try
         setShowAnswer(false); // Keep question visible for next steal attempt
         await updateGameState({
+          teams: updatedTeams as any,
           failedTeamIds: updatedFailedTeamIds, // Store failed teams in gameState
           state: 'question_active', // Ensure state is question_active so clients can buzz in
           buzzedTeamId: null, // Clear so another team can buzz in
@@ -852,53 +860,21 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
 
     const questionId = selectedQuestion.question._id.toString();
     const pickerTeamIndex = selectedQuestion.pickerTeamIndex;
-    const pickerTeam = gameState.teams[pickerTeamIndex];
-    const points = selectedQuestion.question.points;
-    const failedTeamIds = gameState.failedTeamIds || [];
 
     // Show the answer
     setShowAnswer(true);
 
-    // Check if original picker is already in failed list
-    const pickerTeamId = pickerTeam?.id;
-    const pickerAlreadyFailed = pickerTeamId && failedTeamIds.includes(pickerTeamId);
-
-    console.log('[HOST] No buzz in - checking if picker should be deducted:', {
-      pickerTeamId,
+    console.log('[HOST] No buzz in - showing answer, no points changed:', {
       pickerTeamIndex,
-      pickerAlreadyFailed,
-      failedTeamIds
+      questionId
     });
-
-    let updatedTeams: Team[] = gameState.teams.map(team => ({
-      id: team.id,
-      name: team.name,
-      score: team.score
-    }));
-
-    // Only deduct points if the original picker is NOT in the failed list
-    if (!pickerAlreadyFailed && pickerTeam) {
-      // Picker hasn't been deducted yet - deduct now
-      updatedTeams = gameState.teams.map((team, idx) =>
-        idx === pickerTeamIndex
-          ? { id: team.id, name: team.name, score: team.score - points }
-          : { id: team.id, name: team.name, score: team.score }
-      );
-      console.log('[HOST] Deducting points from picker (no buzz in):', {
-        pickerTeamId,
-        points,
-        oldScore: pickerTeam.score,
-        newScore: pickerTeam.score - points
-      });
-    } else {
-      console.log('[HOST] Picker already deducted or not found, skipping deduction');
-    }
 
     // Mark question as completed
     const completedQuestionIds = [...gameState.completedQuestionIds, questionId];
 
+    // No points are added or deducted when no one buzzes in
+    // Control stays with the previous controller (pickerTeamIndex)
     await updateGameState({
-      teams: updatedTeams as any,
       questionPickerTeamIndex: pickerTeamIndex, // Keep original picker
       currentTeamIndex: pickerTeamIndex, // Also update for backwards compatibility
       completedQuestionIds,
@@ -907,60 +883,34 @@ function GamePlayPageContent({ params }: { params: Promise<{ id: string }> }) {
     });
   };
 
-  // Handle when all teams have tried and failed - show answer and deduct points from original picker
+  // Handle when all teams have tried and failed - show answer, control stays with previous controller
+  // All teams that buzzed in and got it wrong have already lost points (from handleAnswer/handleStealAnswer)
   const handleAllTeamsFailed = async () => {
     if (!gameState || !selectedQuestion) return;
 
     const questionId = selectedQuestion.question._id.toString();
     const pickerTeamIndex = selectedQuestion.pickerTeamIndex;
-    const pickerTeam = gameState.teams[pickerTeamIndex];
-    const points = selectedQuestion.question.points;
     const failedTeamIds = gameState.failedTeamIds || [];
 
     // Show the answer
     setShowAnswer(true);
 
-    // Only deduct points from the original picker if they haven't already been deducted
-    // (i.e., if they picked the question but never buzzed in, or if they're not in failedTeamIds)
-    const pickerTeamId = pickerTeam?.id;
-    const pickerAlreadyFailed = pickerTeamId && failedTeamIds.includes(pickerTeamId);
-
-    console.log('[HOST] All teams failed - checking if picker already deducted:', {
-      pickerTeamId,
+    console.log('[HOST] All teams failed - showing answer, control stays with picker:', {
       pickerTeamIndex,
-      pickerAlreadyFailed,
-      failedTeamIds
+      failedTeamIds,
+      note: 'All teams that buzzed in have already lost points'
     });
 
-    let updatedTeams: Team[] = gameState.teams.map(team => ({
-      id: team.id,
-      name: team.name,
-      score: team.score
-    }));
-
-    if (!pickerAlreadyFailed && pickerTeam) {
-      // Picker hasn't been deducted yet - deduct now
-      updatedTeams = gameState.teams.map((team, idx) =>
-        idx === pickerTeamIndex
-          ? { id: team.id, name: team.name, score: team.score - points }
-          : { id: team.id, name: team.name, score: team.score }
-      );
-      console.log('[HOST] Deducting points from picker:', {
-        pickerTeamId,
-        points,
-        oldScore: pickerTeam.score,
-        newScore: pickerTeam.score - points
-      });
-    } else {
-      console.log('[HOST] Picker already deducted, skipping deduction');
-    }
+    // All teams that buzzed in and got it wrong have already lost points
+    // If the picker never buzzed in, they don't lose points
+    // Control stays with the previous controller (pickerTeamIndex)
+    // No additional point deductions needed here
 
     // Mark question as completed
     const completedQuestionIds = [...gameState.completedQuestionIds, questionId];
 
     await updateGameState({
-      teams: updatedTeams as any,
-      questionPickerTeamIndex: pickerTeamIndex, // Keep original picker
+      questionPickerTeamIndex: pickerTeamIndex, // Keep original picker - control stays with previous controller
       currentTeamIndex: pickerTeamIndex, // Also update for backwards compatibility
       completedQuestionIds,
       state: 'showing_answer', // Set state to showing_answer so clients see "waiting for next question"
